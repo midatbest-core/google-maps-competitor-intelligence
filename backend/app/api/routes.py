@@ -65,7 +65,7 @@ async def start_scrape(project_id: str, service: ScrapeService = Depends(get_scr
     run = service.create_scrape_run(project_id)
     try:
         pool = await get_redis_pool()
-        await pool.enqueue_job("mock_scrape_job", run.id)
+        await pool.enqueue_job("scrape_job", run.id)
         await pool.close()
     except Exception as e:
         # Mark failed if we can't enqueue
@@ -91,7 +91,7 @@ async def resume_scrape_run(run_id: str, service: ScrapeService = Depends(get_sc
     
     try:
         pool = await get_redis_pool()
-        await pool.enqueue_job("mock_scrape_job", run.id)
+        await pool.enqueue_job("scrape_job", run.id)
         await pool.close()
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to enqueue resume job")

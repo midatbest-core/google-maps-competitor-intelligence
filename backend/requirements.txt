@@ -10,3 +10,6 @@ pydantic-settings
 pytest
 pytest-asyncio
 python-dotenv
+playwright
+beautifulsoup4
+dateparser

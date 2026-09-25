@@ -2,8 +2,9 @@ import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.models.scrape import ScrapeRun, ScrapeRunCompetitor
-from app.workers.main import mock_scrape_job
+from app.workers.main import scrape_job
 from app.core.database import get_db, SessionLocal
+from app.scraper.schemas import ScrapeResult, NormalizedPost
 import app.api.routes as routes
 
 client = TestClient(app)
@@ -55,19 +56,19 @@ async def test_project_lifecycle():
 
     # 3. Add Competitors
     # C1: SUCCESS
-    c1_res = client.post(f"/projects/{project_id}/competitors", json={"business_name": "Standard Biz"})
+    c1_res = client.post(f"/projects/{project_id}/competitors", json={"business_name": "Standard Biz", "google_maps_url": "http://g.co/1"})
     assert c1_res.status_code == 201
     
     # C2: VERIFICATION_REQUIRED
-    c2_res = client.post(f"/projects/{project_id}/competitors", json={"business_name": "Require Captcha Biz"})
+    c2_res = client.post(f"/projects/{project_id}/competitors", json={"business_name": "Require Captcha Biz", "google_maps_url": "http://g.co/2"})
     assert c2_res.status_code == 201
 
     # C3: FAILED
-    c3_res = client.post(f"/projects/{project_id}/competitors", json={"business_name": "Error Network Biz"})
+    c3_res = client.post(f"/projects/{project_id}/competitors", json={"business_name": "Error Network Biz", "google_maps_url": "http://g.co/3"})
     assert c3_res.status_code == 201
 
     # C4: NO DATA
-    c4_res = client.post(f"/projects/{project_id}/competitors", json={"business_name": "No_Data Biz"})
+    c4_res = client.post(f"/projects/{project_id}/competitors", json={"business_name": "No_Data Biz", "google_maps_url": "http://g.co/4"})
     assert c4_res.status_code == 201
 
     # 4. Start Scrape
@@ -76,7 +77,25 @@ async def test_project_lifecycle():
     run_id = scrape_res.json()["id"]
 
     # 5. Run mock worker job synchronously
-    await mock_scrape_job(None, run_id)
+    class MockAdapter:
+        async def scrape(self, target_url: str):
+            res = ScrapeResult()
+            if "1" in target_url:
+                res.status = "SUCCESS"
+                res.posts = [NormalizedPost(source_id="p1", fingerprint="f1")] * 5
+            elif "2" in target_url:
+                res.status = "VERIFICATION_REQUIRED"
+                res.error_message = "Mocked CAPTCHA"
+            elif "3" in target_url:
+                res.status = "FAILED"
+                res.error_message = "Mocked Network Error"
+            else:
+                res.status = "NO_DATA"
+            return res
+        async def close(self): pass
+
+    ctx = {'scraper_adapter': MockAdapter()}
+    await scrape_job(ctx, run_id)
 
     # 6. Verify run state
     run_res = client.get(f"/scrape-runs/{run_id}")
