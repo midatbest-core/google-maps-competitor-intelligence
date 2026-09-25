@@ -1,6 +1,12 @@
 import pytest
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+# Mock environment variables for testing
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+os.environ["REDIS_URL"] = "redis://localhost:6379/0"
+
 from app.models.base import Base
 
 # Try to use SQLite for tests if Postgres is unavailable, 

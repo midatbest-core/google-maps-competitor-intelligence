@@ -18,3 +18,7 @@ class ProjectRepository(BaseRepository[Project]):
         self.session.commit()
         self.session.refresh(db_obj)
         return db_obj
+
+    def get_competitors(self, project_id: str) -> list[ProjectCompetitor]:
+        stmt = select(ProjectCompetitor).where(ProjectCompetitor.project_id == project_id)
+        return list(self.session.scalars(stmt))
