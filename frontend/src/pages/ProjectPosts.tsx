@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { getProjectPosts, getAnalyticsSummary, getProjectCompetitors } from '../api';
-import type { Competitor, PostResponse } from '../api';
+import type { Competitor, PostResponse, AnalyticsSummaryResponse, TopicFrequency, KeywordFrequency, DetailedTopicGap } from '../api';
 import './ProjectPosts.css';
 
 const ProjectPosts: React.FC = () => {
@@ -13,7 +13,7 @@ const ProjectPosts: React.FC = () => {
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(0);
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
-  const [analytics, setAnalytics] = useState<any>(null);
+  const [analytics, setAnalytics] = useState<AnalyticsSummaryResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -52,7 +52,7 @@ const ProjectPosts: React.FC = () => {
       }
 
       // Load posts
-      const params: any = { page, page_size: 20 };
+      const params: Record<string, string | number | boolean | undefined> = { page, page_size: 20 };
       if (search) params.search = search;
       if (competitorId) params.competitor_id = competitorId;
       if (topic) params.topic = topic;
@@ -98,7 +98,7 @@ const ProjectPosts: React.FC = () => {
             <h4>Top Topics</h4>
             {analytics.topics?.length > 0 ? (
               <ul className="intel-list">
-                {analytics.topics.slice(0, 5).map((t: any, i: number) => (
+                {analytics.topics.slice(0, 5).map((t: TopicFrequency, i: number) => (
                   <li key={i}>
                     <span className="intel-label">{t.topic}</span>
                     <span className="intel-value">{t.count} posts</span>
@@ -112,7 +112,7 @@ const ProjectPosts: React.FC = () => {
             <h4>Top Keywords</h4>
             {analytics.keywords?.length > 0 ? (
               <div className="keyword-cloud">
-                {analytics.keywords.slice(0, 10).map((k: any, i: number) => (
+                {analytics.keywords.slice(0, 10).map((k: KeywordFrequency, i: number) => (
                   <span key={i} className="keyword-tag">{k.keyword} ({k.count})</span>
                 ))}
               </div>
@@ -123,7 +123,7 @@ const ProjectPosts: React.FC = () => {
             <h4>Content Gaps (Topics)</h4>
             {analytics.detailed_topic_gaps?.length > 0 ? (
               <ul className="intel-list">
-                {analytics.detailed_topic_gaps.slice(0, 5).map((g: any, i: number) => (
+                {analytics.detailed_topic_gaps.slice(0, 5).map((g: DetailedTopicGap, i: number) => (
                   <li key={i}>
                     <span className="intel-label">{g.topic}</span>
                     <span className="intel-value gap-high">Competitors: {g.competitor_frequency} | You: {g.project_frequency}</span>
@@ -180,7 +180,7 @@ const ProjectPosts: React.FC = () => {
             onChange={(e) => handleFilterChange('topic', e.target.value)}
           >
             <option value="">All Topics</option>
-            {analytics?.topics?.map((t: any) => (
+            {analytics?.topics?.map((t: TopicFrequency) => (
               <option key={t.topic} value={t.topic}>{t.topic}</option>
             ))}
           </select>
@@ -207,7 +207,7 @@ const ProjectPosts: React.FC = () => {
             {posts.length === 0 ? (
               <div className="empty-state-large">
                 <p>No competitor posts match your criteria.</p>
-                {Object.keys(Object.fromEntries(searchParams)).length === 0 && (
+                {searchParams.toString() === '' && (
                   <p>Run a scrape in the Scraping tab to populate this repository.</p>
                 )}
               </div>

@@ -6,12 +6,22 @@ from pydantic_settings import BaseSettings
 
 from pydantic_settings import SettingsConfigDict
 
+from pydantic import model_validator
+
 class SecuritySettings(BaseSettings):
     SECRET_KEY: str = "a_very_secret_key_for_development_only_change_in_prod"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days for dev
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    @model_validator(mode='after')
+    def check_secret_key_in_production(self):
+        import os
+        env = os.getenv("APP_ENV", "development")
+        if env == "production" and self.SECRET_KEY == "a_very_secret_key_for_development_only_change_in_prod":
+            raise ValueError("SECRET_KEY must be set securely in production")
+        return self
 
 settings = SecuritySettings()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

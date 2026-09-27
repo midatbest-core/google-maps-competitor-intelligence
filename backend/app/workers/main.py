@@ -1,4 +1,4 @@
-﻿from datetime import datetime, timezone
+from datetime import datetime, timezone
 import logging
 from app.core.config import settings
 from app.core.database import SessionLocal
@@ -168,9 +168,11 @@ async def generate_content_job(ctx, content_id: str):
     try:
         from app.services.generation_service import GenerationService
         from app.providers.ai.factory import get_ai_provider
+        from app.providers.embedding.factory import get_embedding_provider
 
-        provider = get_ai_provider()
-        service = GenerationService(db, provider)
+        ai_provider = get_ai_provider()
+        emb_provider = get_embedding_provider()
+        service = GenerationService(db, ai_provider, emb_provider)
         await service.execute_generation(content_id)
 
     except Exception as e:

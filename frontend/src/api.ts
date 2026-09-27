@@ -100,7 +100,7 @@ export interface DiscoveryCandidate {
 export const getProjectCompetitors = (projectId: string) => api.get<Competitor[]>(`/projects/${projectId}/competitors`);
 export const addDirectCompetitor = (projectId: string, data: DirectCompetitorCreate) => api.post<Competitor>(`/projects/${projectId}/competitors/direct`, data);
 
-export const startDiscovery = (projectId: string, data: any) => api.post<DiscoveryRun>(`/projects/${projectId}/discovery`, data);
+export const startDiscovery = (projectId: string, data: Record<string, string | number | boolean | undefined>) => api.post<DiscoveryRun>(`/projects/${projectId}/discovery`, data);
 export const getDiscoveryRuns = (projectId: string) => api.get<DiscoveryRun[]>(`/projects/${projectId}/discovery-runs`);
 export const getDiscoveryRun = (projectId: string, runId: string) => api.get<DiscoveryRun>(`/projects/${projectId}/discovery-runs/${runId}`);
 export const getDiscoveryCandidates = (projectId: string, skip = 0, limit = 50) => api.get<DiscoveryCandidate[]>(`/projects/${projectId}/discovery-candidates`, { params: { skip, limit } });
@@ -198,7 +198,7 @@ export interface PostListResponse {
   pages: number;
 }
 
-export const getProjectPosts = (projectId: string, params?: any) => api.get<PostListResponse>(`/projects/${projectId}/posts`, { params });
+export const getProjectPosts = (projectId: string, params?: Record<string, string | number | boolean | undefined>) => api.get<PostListResponse>(`/projects/${projectId}/posts`, { params });
 export const getProjectPost = (projectId: string, postId: string) => api.get<PostResponse>(`/projects/${projectId}/posts/${postId}`);
 
 export interface TopicFrequency {

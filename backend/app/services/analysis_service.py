@@ -15,12 +15,24 @@ from app.repositories.analysis_repo import AnalysisRepository, EmbeddingReposito
 logger = logging.getLogger(__name__)
 
 class AnalysisService:
-    def __init__(self, db: Session, ai_provider: AIProvider, embedding_provider: EmbeddingProvider):
+    def __init__(self, db: Session, ai_provider: AIProvider, embedding_provider: EmbeddingProvider, workspace=None):
         self.db = db
         self.ai = ai_provider
         self.embedding = embedding_provider
         self.analysis_repo = AnalysisRepository(db)
         self.embed_repo = EmbeddingRepository(db)
+        self.workspace = workspace
+
+    def _verify_post(self, post: Post):
+        if not self.workspace:
+            return
+        from app.models.project import Project
+        from app.models.competitor import ProjectCompetitor
+        # Check if the post's business is in any project of the current workspace
+        own_project = self.db.query(Project).filter(Project.own_business_id == post.business_id, Project.workspace_id == self.workspace.id).first()
+        comp_project = self.db.query(Project).join(ProjectCompetitor, Project.id == ProjectCompetitor.project_id).filter(ProjectCompetitor.business_id == post.business_id, Project.workspace_id == self.workspace.id).first()
+        if not own_project and not comp_project:
+            raise ValueError("Not authorized to access this post")
 
     async def analyze_post(self, post_id: str) -> Optional[AIAnalysis]:
         """Analyzes a post, returning the AIAnalysis record. Idempotent."""
@@ -28,6 +40,8 @@ class AnalysisService:
         if not post or not post.text_content:
             return None
             
+        self._verify_post(post)
+
         # Check idempotency
         existing_analysis = self.analysis_repo.get_analysis(
             post_id=post_id,
@@ -86,6 +100,8 @@ class AnalysisService:
         if not post or not post.text_content:
             return None
             
+        self._verify_post(post)
+
         embedding_version = "v1"
             
         existing_embedding = self.embed_repo.get_embedding(
