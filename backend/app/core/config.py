@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "INFO"
     DATABASE_URL: str
     REDIS_URL: str
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     
     # Scraper config
     SCRAPER_MAX_RETRIES: int = 3

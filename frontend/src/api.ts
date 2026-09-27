@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: '/api', // In vite config, we will proxy this to the backend
+  baseURL: import.meta.env.VITE_API_URL || '/api', // Use env var if available, else fallback to proxy
 });
 
 api.interceptors.request.use((config) => {

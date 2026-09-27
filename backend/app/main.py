@@ -5,10 +5,21 @@ from app.api.discovery import discovery_router
 from app.api.generation import generation_router
 from app.api.auth import auth_router
 from app.core.logging import setup_logging
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
 
 setup_logging()
 
 app = FastAPI(title="Google Maps Competitor Update Intelligence API")
+
+# Setup CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS if hasattr(settings, 'CORS_ORIGINS') else ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(health_router)
 app.include_router(auth_router)
