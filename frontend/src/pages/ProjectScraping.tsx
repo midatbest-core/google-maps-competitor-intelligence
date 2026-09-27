@@ -42,38 +42,44 @@ const ProjectScraping: React.FC = () => {
   });
   const [savingSchedule, setSavingSchedule] = useState(false);
 
+  const fetchSchedule = async () => {
+    if (!projectId) return;
+    try {
+      const schedRes = await getScrapeSchedule(projectId);
+      if (schedRes.data) {
+        setSchedule(schedRes.data);
+        setScheduleForm({
+          time_of_day: schedRes.data.time_of_day,
+          timezone: schedRes.data.timezone
+        });
+      }
+    } catch (err: any) {
+      if (err.response?.status !== 404) {
+        console.error('Failed to load schedule', err);
+      }
+      setSchedule(null);
+    }
+  };
+
   const fetchRuns = async () => {
     try {
-      const [runsRes, schedRes] = await Promise.allSettled([
-        getScrapeRuns(projectId!),
-        getScrapeSchedule(projectId!)
-      ]);
+      const runsRes = await getScrapeRuns(projectId!);
       
-      if (runsRes.status === 'fulfilled') {
-        const sortedRuns = runsRes.value.data.sort((a, b) => {
-          if (a.start_time && b.start_time) {
-            return new Date(b.start_time).getTime() - new Date(a.start_time).getTime();
-          }
-          return b.id.localeCompare(a.id);
-        });
-        setRuns(sortedRuns);
-        
-        const active = sortedRuns.find(r => ['QUEUED', 'RUNNING', 'RETRYING', 'PAUSED_MANUAL_INTERVENTION'].includes(r.status));
-        if (active) {
-          if (!activeRunId) {
-            setActiveRunId(active.id);
-          }
-        } else if (!activeRunId && sortedRuns.length > 0) {
-          setActiveRunId(sortedRuns[0].id);
+      const sortedRuns = runsRes.data.sort((a, b) => {
+        if (a.start_time && b.start_time) {
+          return new Date(b.start_time).getTime() - new Date(a.start_time).getTime();
         }
-      }
+        return b.id.localeCompare(a.id);
+      });
+      setRuns(sortedRuns);
       
-      if (schedRes.status === 'fulfilled' && schedRes.value.data) {
-        setSchedule(schedRes.value.data);
-        setScheduleForm({
-          time_of_day: schedRes.value.data.time_of_day,
-          timezone: schedRes.value.data.timezone
-        });
+      const active = sortedRuns.find(r => ['QUEUED', 'RUNNING', 'RETRYING', 'PAUSED_MANUAL_INTERVENTION'].includes(r.status));
+      if (active) {
+        if (!activeRunId) {
+          setActiveRunId(active.id);
+        }
+      } else if (!activeRunId && sortedRuns.length > 0) {
+        setActiveRunId(sortedRuns[0].id);
       }
     } catch (err: any) {
       console.error(err);
@@ -139,6 +145,7 @@ const ProjectScraping: React.FC = () => {
 
   useEffect(() => {
     if (projectId) {
+      fetchSchedule();
       fetchRuns();
     }
     return () => stopPolling();
