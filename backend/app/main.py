@@ -29,3 +29,12 @@ app.include_router(analytics_router)
 app.include_router(intelligence_router)
 app.include_router(discovery_router)
 app.include_router(generation_router)
+
+@app.get("/")
+async def root():
+    return {
+        "name": "Google Maps Competitor Intelligence API",
+        "status": "running",
+        "docs": "/docs",
+        "health": "/health"
+    }
