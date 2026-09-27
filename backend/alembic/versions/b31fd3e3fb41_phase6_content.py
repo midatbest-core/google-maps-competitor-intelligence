@@ -45,7 +45,6 @@ def upgrade() -> None:
         batch_op.create_foreign_key('fk_parent_generation_id', 'generated_content', ['parent_generation_id'], ['id'], ondelete='SET NULL')
         
         batch_op.create_index(batch_op.f('ix_generated_content_fingerprint'), ['fingerprint'], unique=False)
-        batch_op.create_index(batch_op.f('ix_generated_content_project_id'), ['project_id'], unique=False)
 
 def downgrade() -> None:
     pass
