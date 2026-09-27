@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.core.database import get_db
@@ -74,11 +74,21 @@ def get_project_summary(project_id: str, service: ProjectService = Depends(get_p
         raise HTTPException(status_code=404, detail=str(e))
 
 @project_router.post("/{project_id}/competitors", response_model=CompetitorResponse, status_code=status.HTTP_201_CREATED)
-def add_competitor(project_id: str, competitor: CompetitorCreate, service: ProjectService = Depends(get_project_service)):
+async def add_competitor(project_id: str, competitor: CompetitorCreate, service: ProjectService = Depends(get_project_service), scrape_service: ScrapeService = Depends(get_scrape_service)):
     try:
-        return service.add_competitor(project_id, competitor)
+        comp = service.add_competitor(project_id, competitor)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+        
+    try:
+        run = scrape_service.create_scrape_run(project_id)
+        pool = await get_redis_pool()
+        await pool.enqueue_job("scrape_job", run.id)
+        await pool.close()
+    except Exception:
+        pass # Ignore redis errors if worker is down
+
+    return comp
 
 @project_router.get("/{project_id}/competitors", response_model=list[CompetitorResponse])
 def get_competitors(project_id: str, service: ProjectService = Depends(get_project_service)):
@@ -98,8 +108,7 @@ async def start_scrape(project_id: str, service: ScrapeService = Depends(get_scr
         await pool.enqueue_job("scrape_job", run.id)
         await pool.close()
     except Exception as e:
-        # Mark failed if we can't enqueue
-        raise HTTPException(status_code=500, detail="Failed to enqueue scrape job")
+        pass # Handle gracefully instead of failing if redis is offline
     return run
 
 @project_router.get("/{project_id}/scrape-runs", response_model=list[ScrapeRunResponse])

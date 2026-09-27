@@ -12,5 +12,5 @@ async def get_redis_pool():
     database = int(parsed.path.strip("/")) if parsed.path and parsed.path.strip("/") else 0
     password = parsed.password
     
-    redis_settings = RedisSettings(host=host, port=port, database=database, password=password)
+    redis_settings = RedisSettings(host=host, port=port, database=database, password=password, conn_timeout=1, conn_retries=0)
     return await create_pool(redis_settings)

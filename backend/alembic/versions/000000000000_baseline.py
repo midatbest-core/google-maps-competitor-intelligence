@@ -188,6 +188,7 @@ def upgrade() -> None:
         sa.UniqueConstraint('fingerprint', name='generated_content_fingerprint_key')
     )
     op.create_index(op.f('ix_generated_content_project_id'), 'generated_content', ['project_id'], unique=False)
+    op.create_index(op.f('ix_generated_content_fingerprint'), 'generated_content', ['fingerprint'], unique=True)
 
 def downgrade() -> None:
     op.drop_table('generated_content')

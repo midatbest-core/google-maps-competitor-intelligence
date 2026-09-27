@@ -12,6 +12,7 @@ class ProjectCreate(ProjectBase):
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    own_business_id: Optional[str] = None
 
 class ProjectResponse(ProjectBase):
     id: str

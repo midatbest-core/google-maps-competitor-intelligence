@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
-import { getProjectCompetitors, addDirectCompetitor } from '../api';
+import { getProjectCompetitors, addDirectCompetitor, getProjectSummary, updateProject } from '../api';
 import type { Competitor } from '../api';
 import './ProjectCompetitors.css';
 
@@ -9,6 +9,7 @@ const ProjectCompetitors = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
+  const [ownBusinessId, setOwnBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -22,19 +23,33 @@ const ProjectCompetitors = () => {
 
   useEffect(() => {
     if (projectId) {
-      loadCompetitors();
+      loadData();
     }
   }, [projectId]);
 
-  const loadCompetitors = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const res = await getProjectCompetitors(projectId!);
-      setCompetitors(res.data);
+      const [compRes, projRes] = await Promise.all([
+        getProjectCompetitors(projectId!),
+        getProjectSummary(projectId!)
+      ]);
+      setCompetitors(compRes.data);
+      setOwnBusinessId(projRes.data.project.own_business_id || null);
     } catch (err: any) {
-      setError('Failed to load competitors');
+      setError('Failed to load data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCompetitors = async () => {
+    // legacy method for reloading just competitors if needed, though loadData is preferred now
+    try {
+      const compRes = await getProjectCompetitors(projectId!);
+      setCompetitors(compRes.data);
+    } catch (err: any) {
+      setError('Failed to load competitors');
     }
   };
 
@@ -62,6 +77,15 @@ const ProjectCompetitors = () => {
       setFormError(err.response?.data?.detail || 'Failed to add competitor');
     } finally {
       setFormSubmitting(false);
+    }
+  };
+
+  const handleSetOwnBusiness = async (businessId: string) => {
+    try {
+      await updateProject(projectId!, { own_business_id: businessId });
+      setOwnBusinessId(businessId);
+    } catch (err: any) {
+      setError('Failed to update own business');
     }
   };
 
@@ -149,9 +173,22 @@ const ProjectCompetitors = () => {
                     </a>
                   )}
                 </div>
-                <div className="competitor-status">
-                  <span className={`status-dot ${c.is_active ? 'active' : 'inactive'}`}></span>
-                  {c.is_active ? 'Active' : 'Inactive'}
+                <div className="competitor-status" style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+                  <div>
+                    <span className={`status-dot ${c.is_active ? 'active' : 'inactive'}`}></span>
+                    {c.is_active ? 'Active' : 'Inactive'}
+                  </div>
+                  {c.business_id === ownBusinessId ? (
+                    <span className="badge" style={{ backgroundColor: '#10b981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>Your Business</span>
+                  ) : (
+                    <button 
+                      className="secondary-btn" 
+                      style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                      onClick={() => handleSetOwnBusiness(c.business_id)}
+                    >
+                      Set as My Business
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

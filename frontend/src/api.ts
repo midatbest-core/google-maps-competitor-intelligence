@@ -26,7 +26,7 @@ api.interceptors.response.use(
 export const getProjects = () => api.get('/projects');
 export const getProject = (id: string) => api.get(`/projects/${id}`);
 export const createProject = (data: { name: string, description?: string }) => api.post('/projects', data);
-export const updateProject = (id: string, data: { name?: string, description?: string }) => api.patch(`/projects/${id}`, data);
+export const updateProject = (id: string, data: { name?: string, description?: string, own_business_id?: string }) => api.patch(`/projects/${id}`, data);
 export const getProjectSummary = (id: string) => api.get(`/projects/${id}/summary`);
 
 export interface BusinessProfile {

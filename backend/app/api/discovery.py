@@ -4,6 +4,8 @@ from app.services.discovery_service import DiscoveryService
 from app.schemas.discovery import DiscoveryRunCreate, DiscoveryRunResponse, DiscoveryCandidateResponse, DirectCompetitorCreate
 from app.schemas.competitor import CompetitorResponse
 from app.core.arq import get_redis_pool
+from app.services.scrape_service import ScrapeService
+from app.api.dependencies import get_discovery_service, get_scrape_service
 from typing import List
 
 discovery_router = APIRouter(tags=["discovery"])
@@ -42,12 +44,21 @@ def list_candidates(project_id: str, skip: int = 0, limit: int = 50, service: Di
     return service.get_candidates(project_id, skip=skip, limit=limit)
 
 @discovery_router.post("/projects/{project_id}/discovery-candidates/{candidate_id}/select", response_model=CompetitorResponse)
-def select_candidate(project_id: str, candidate_id: str, service: DiscoveryService = Depends(get_discovery_service)):
+async def select_candidate(project_id: str, candidate_id: str, service: DiscoveryService = Depends(get_discovery_service), scrape_service: ScrapeService = Depends(get_scrape_service)):
     try:
         comp = service.select_candidate(project_id, candidate_id)
-        return comp
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+        
+    try:
+        run = scrape_service.create_scrape_run(project_id)
+        pool = await get_redis_pool()
+        await pool.enqueue_job("scrape_job", run.id)
+        await pool.close()
+    except Exception:
+        pass
+
+    return comp
 
 @discovery_router.post("/projects/{project_id}/discovery-candidates/{candidate_id}/reject", response_model=DiscoveryCandidateResponse)
 def reject_candidate(project_id: str, candidate_id: str, service: DiscoveryService = Depends(get_discovery_service)):
@@ -58,12 +69,21 @@ def reject_candidate(project_id: str, candidate_id: str, service: DiscoveryServi
         raise HTTPException(status_code=404, detail=str(e))
 
 @discovery_router.post("/projects/{project_id}/competitors/direct", response_model=CompetitorResponse)
-def add_direct_competitor(project_id: str, payload: DirectCompetitorCreate, service: DiscoveryService = Depends(get_discovery_service)):
+async def add_direct_competitor(project_id: str, payload: DirectCompetitorCreate, service: DiscoveryService = Depends(get_discovery_service), scrape_service: ScrapeService = Depends(get_scrape_service)):
     try:
         comp = service.add_direct_competitor(project_id, payload)
-        return comp
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+        
+    try:
+        run = scrape_service.create_scrape_run(project_id)
+        pool = await get_redis_pool()
+        await pool.enqueue_job("scrape_job", run.id)
+        await pool.close()
+    except Exception:
+        pass
+        
+    return comp
 
 @discovery_router.post("/projects/{project_id}/discovery-runs/{run_id}/resume", response_model=DiscoveryRunResponse)
 async def resume_discovery(project_id: str, run_id: str, service: DiscoveryService = Depends(get_discovery_service)):

@@ -13,3 +13,5 @@ python-dotenv
 playwright
 beautifulsoup4
 dateparser
+python-jose[cryptography]==3.3.0
+bcrypt
