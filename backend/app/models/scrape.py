@@ -1,7 +1,21 @@
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey, Integer, DateTime, Text, JSON
+from sqlalchemy import String, ForeignKey, Integer, DateTime, Text, JSON, UniqueConstraint, Boolean
 from datetime import datetime
 from .base import Base, TimestampMixin, generate_uuid
+
+class ScrapeSchedule(Base, TimestampMixin):
+    __tablename__ = "scrape_schedules"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, unique=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    frequency: Mapped[str] = mapped_column(String(50), default="DAILY")
+    time_of_day: Mapped[str] = mapped_column(String(10), nullable=False)
+    timezone: Mapped[str] = mapped_column(String(50), nullable=False)
+    next_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    project = relationship("Project", back_populates="scrape_schedule")
 
 class ScrapeRun(Base, TimestampMixin):
     __tablename__ = "scrape_runs"
@@ -43,6 +57,9 @@ class ScrapeRunCompetitor(Base, TimestampMixin):
 
 class ScrapeObservation(Base, TimestampMixin):
     __tablename__ = "scrape_observations"
+    __table_args__ = (
+        UniqueConstraint("scrape_run_competitor_id", "post_id", name="uq_scrape_obs_run_post"),
+    )
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
     scrape_run_competitor_id: Mapped[str] = mapped_column(ForeignKey("scrape_run_competitors.id", ondelete="CASCADE"), nullable=False, index=True)

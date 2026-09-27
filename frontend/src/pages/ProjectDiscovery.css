@@ -1,0 +1,171 @@
+.discovery-layout {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 32px;
+}
+
+@media (max-width: 1024px) {
+  .discovery-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.runs-column, .candidates-column {
+  display: flex;
+  flex-direction: column;
+}
+
+.runs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.run-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 16px;
+  font-size: 14px;
+}
+
+.run-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.run-date {
+  font-weight: 500;
+  color: white;
+}
+
+.run-details {
+  color: #94a3b8;
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.run-stats {
+  display: flex;
+  gap: 16px;
+  color: #64748b;
+  font-size: 12px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+  padding-top: 12px;
+}
+
+.empty-state-small {
+  padding: 24px;
+  text-align: center;
+  color: #94a3b8;
+  border: 1px dashed rgba(255,255,255,0.1);
+  border-radius: 8px;
+}
+
+.candidates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.candidate-card {
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.candidate-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  color: white;
+}
+
+.candidate-meta {
+  color: #94a3b8;
+  font-size: 14px;
+  margin-bottom: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.candidate-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 140px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.primary-btn-sm {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.primary-btn-sm:hover {
+  background: #2563eb;
+}
+
+.secondary-btn-sm {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 5px 11px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.secondary-btn-sm:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px;
+}
+
+.icon-btn:hover {
+  color: white;
+}
+
+/* Badges */
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.badge-queued { background: rgba(148, 163, 184, 0.2); color: #cbd5e1; }
+.badge-running { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+.badge-success { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+.badge-warning { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+.badge-failed { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+.badge-default { background: rgba(255, 255, 255, 0.1); color: white; }
+
+.badge-new { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+.badge-selected { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+.badge-rejected { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+.badge-already { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }

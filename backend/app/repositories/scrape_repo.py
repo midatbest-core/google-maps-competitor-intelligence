@@ -1,4 +1,4 @@
-from typing import List, Optional
+﻿from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from .base import BaseRepository
@@ -26,3 +26,13 @@ class ScrapeRunCompetitorRepository(BaseRepository[ScrapeRunCompetitor]):
 class ScrapeObservationRepository(BaseRepository[ScrapeObservation]):
     def __init__(self, session: Session):
         super().__init__(ScrapeObservation, session)
+
+from app.models.scrape import ScrapeSchedule
+
+class ScrapeScheduleRepository(BaseRepository[ScrapeSchedule]):
+    def __init__(self, session: Session):
+        super().__init__(ScrapeSchedule, session)
+
+    def get_by_project(self, project_id: str) -> Optional[ScrapeSchedule]:
+        stmt = select(ScrapeSchedule).where(ScrapeSchedule.project_id == project_id)
+        return self.session.scalar(stmt)

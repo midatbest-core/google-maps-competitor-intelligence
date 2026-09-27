@@ -9,6 +9,18 @@ import app.api.routes as routes
 
 client = TestClient(app)
 
+from app.api.dependencies import get_current_workspace, get_current_user
+from app.models.auth import Workspace, User
+
+def override_get_current_user():
+    return User(id="test_user", email="test@test.com", hashed_password="pw", is_active=True)
+
+def override_get_current_workspace():
+    return Workspace(id="test_ws", name="Test Workspace")
+
+app.dependency_overrides[get_current_user] = override_get_current_user
+app.dependency_overrides[get_current_workspace] = override_get_current_workspace
+
 class MockRedisPool:
     async def enqueue_job(self, *args, **kwargs):
         pass

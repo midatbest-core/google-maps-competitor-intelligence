@@ -7,6 +7,7 @@ class Project(Base, TimestampMixin):
     __tablename__ = "projects"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    workspace_id: Mapped[str | None] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     own_business_id: Mapped[str | None] = mapped_column(ForeignKey("business_profiles.id"))
@@ -15,6 +16,9 @@ class Project(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(50), default="ACTIVE")
 
     # relationships
+    workspace = relationship("Workspace", back_populates="projects")
     own_business = relationship("BusinessProfile", foreign_keys=[own_business_id])
     competitors = relationship("ProjectCompetitor", back_populates="project", cascade="all, delete-orphan")
     scrape_runs = relationship("ScrapeRun", back_populates="project", cascade="all, delete-orphan")
+    scrape_schedule = relationship("ScrapeSchedule", back_populates="project", cascade="all, delete-orphan", uselist=False)
+    discovery_runs = relationship("DiscoveryRun", back_populates="project", cascade="all, delete-orphan")
