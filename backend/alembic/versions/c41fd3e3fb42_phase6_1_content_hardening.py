@@ -17,10 +17,13 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
     # Use Vector type from pgvector
     with op.batch_alter_table('generated_content', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('embedding', Vector(768), nullable=True))
-
+        if bind.dialect.name == 'postgresql':
+            batch_op.add_column(sa.Column('embedding', Vector(768), nullable=True))
+        else:
+            batch_op.add_column(sa.Column('embedding', sa.JSON(), nullable=True))
 
 def downgrade() -> None:
     with op.batch_alter_table('generated_content', schema=None) as batch_op:

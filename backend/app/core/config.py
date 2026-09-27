@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     REDIS_URL: str
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     
+    # Storage
+    LOCAL_STORAGE_DIR: str = "./data"
+
     # Scraper config
     SCRAPER_MAX_RETRIES: int = 3
     SCRAPER_DELAY_MIN: int = 2

@@ -68,7 +68,7 @@ async def scrape_job(ctx, run_id: str):
                 c.new_posts = 0
 
                 # Initialize services
-                storage_provider = LocalStorageProvider(base_dir=settings.DATA_DIR if hasattr(settings, "DATA_DIR") else "./data")
+                storage_provider = LocalStorageProvider(base_dir=settings.LOCAL_STORAGE_DIR)
                 media_downloader = SimpleMediaDownloader()
                 ingestion_service = IngestionService(db, storage_provider, media_downloader)
 
