@@ -19,4 +19,4 @@ COPY backend/ .
 # Set python path
 ENV PYTHONPATH=/app
 
-CMD ["sh", "-c", "set -x; echo PATH=$PATH; which python; which alembic; which uvicorn; python --version; alembic --version; PYTHONUNBUFFERED=1 alembic upgrade head && PYTHONUNBUFFERED=1 uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
