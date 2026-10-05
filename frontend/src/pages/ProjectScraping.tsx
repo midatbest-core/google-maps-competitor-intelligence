@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
-import { getScrapeRuns, startScrape, getScrapeRun, resumeScrapeRun } from '../api';
+import { getScrapeRuns, startScrape, getScrapeRun, resumeScrapeRun, deleteScrapeRun } from '../api';
 import type { ScrapeRun, ScrapeRunCompetitor } from '../api';
 import './ProjectScraping.css';
 
@@ -22,23 +22,23 @@ const STATUS_LABELS: Record<string, string> = {
 
 const ProjectScraping: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
-  
+
   const [runs, setRuns] = useState<ScrapeRun[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [activeRunDetails, setActiveRunDetails] = useState<ScrapeRun | null>(null);
-  
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [resuming, setResuming] = useState(false);
-  
+
   const pollTimerRef = useRef<number | null>(null);
 
 
   const fetchRuns = async () => {
     try {
       const runsRes = await getScrapeRuns(projectId!);
-      
+
       const sortedRuns = runsRes.data.sort((a, b) => {
         if (a.start_time && b.start_time) {
           return new Date(b.start_time).getTime() - new Date(a.start_time).getTime();
@@ -46,7 +46,7 @@ const ProjectScraping: React.FC = () => {
         return b.id.localeCompare(a.id);
       });
       setRuns(sortedRuns);
-      
+
       const active = sortedRuns.find(r => ['QUEUED', 'RUNNING', 'RETRYING', 'PAUSED_MANUAL_INTERVENTION'].includes(r.status));
       if (active) {
         if (!activeRunId) {
@@ -69,7 +69,7 @@ const ProjectScraping: React.FC = () => {
     try {
       const res = await getScrapeRun(activeRunId);
       setActiveRunDetails(res.data);
-      
+
       // Stop polling if run is completed
       if (['SUCCESS', 'PARTIAL_SUCCESS', 'FAILED', 'CANCELLED'].includes(res.data.status)) {
         stopPolling();
@@ -107,7 +107,7 @@ const ProjectScraping: React.FC = () => {
   useEffect(() => {
     if (activeRunId) {
       fetchActiveRunDetails();
-      
+
       // If we select a run that is active, start polling
       const run = runs.find(r => r.id === activeRunId);
       if (run && ['QUEUED', 'RUNNING', 'RETRYING'].includes(run.status)) {
@@ -128,9 +128,37 @@ const ProjectScraping: React.FC = () => {
       setActiveRunId(res.data.id);
     } catch (err: any) {
       console.error(err);
-      setError(err.response?.data?.detail || 'Failed to start scrape');
+      if (err.response?.data?.detail) {
+        setError(`Cannot start scrape: ${err.response.data.detail}`);
+      } else {
+        setError('Failed to start scrape');
+      }
+      await fetchRuns(); // Refresh in case the backend failed stale runs
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleDeleteRun = async (e: React.MouseEvent, runId: string, status: string) => {
+    e.stopPropagation(); // prevent active run change
+    if (['QUEUED', 'RUNNING', 'RETRYING', 'STARTED'].includes(status)) {
+      if (!window.confirm(`This run is marked as ${status}. Are you sure it's stale and you want to delete it?`)) {
+        return;
+      }
+    } else {
+      if (!window.confirm('Delete this scrape run? Post data will be kept.')) return;
+    }
+
+    try {
+      await deleteScrapeRun(projectId!, runId);
+      if (activeRunId === runId) {
+        setActiveRunId(null);
+        setActiveRunDetails(null);
+      }
+      await fetchRuns();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.detail || 'Failed to delete run');
     }
   };
 
@@ -160,7 +188,7 @@ const ProjectScraping: React.FC = () => {
     if (['QUEUED', 'PENDING'].includes(s)) badgeClass = 'status-warning';
     if (['PARTIAL_SUCCESS'].includes(s)) badgeClass = 'status-partial';
     if (['PAUSED_MANUAL_INTERVENTION', 'VERIFICATION_REQUIRED'].includes(s)) badgeClass = 'status-manual';
-    
+
     return <span className={`status-badge ${badgeClass}`}>{STATUS_LABELS[status] || status}</span>;
   };
 
@@ -182,10 +210,10 @@ const ProjectScraping: React.FC = () => {
             <h1>Scraping</h1>
             <p>Monitor and manage competitor data collection.</p>
           </div>
-          <button 
-            className="btn-primary" 
+          <button
+            className="btn-primary"
             onClick={handleStartScrape}
-            disabled={starting || !!(activeRunDetails && ['QUEUED', 'RUNNING', 'RETRYING'].includes(activeRunDetails.status))}
+            disabled={starting}
           >
             {starting ? 'Starting...' : 'Start New Scrape'}
           </button>
@@ -203,14 +231,23 @@ const ProjectScraping: React.FC = () => {
             ) : (
               <div className="run-list">
                 {runs.map(run => (
-                  <div 
-                    key={run.id} 
+                  <div
+                    key={run.id}
                     className={`run-list-item ${activeRunId === run.id ? 'active' : ''}`}
                     onClick={() => setActiveRunId(run.id)}
                   >
                     <div className="run-list-header">
                       <span className="run-id">{run.id.split('-')[0]}</span>
-                      {renderStatusBadge(run.status)}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {renderStatusBadge(run.status)}
+                        <button
+                          onClick={(e) => handleDeleteRun(e, run.id, run.status)}
+                          title="Delete Run"
+                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0 4px', fontSize: '14px' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
                     </div>
                     <div className="run-list-meta">
                       {run.start_time ? new Date(run.start_time).toLocaleString() : 'Not started'}

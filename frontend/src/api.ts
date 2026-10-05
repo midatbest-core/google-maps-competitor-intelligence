@@ -131,6 +131,7 @@ export const startScrape = (projectId: string) => api.post<ScrapeRun>(`/projects
 export const getScrapeRuns = (projectId: string) => api.get<ScrapeRun[]>(`/projects/${projectId}/scrape-runs`);
 export const getScrapeRun = (runId: string) => api.get<ScrapeRun>(`/scrape-runs/${runId}`);
 export const resumeScrapeRun = (runId: string) => api.post<ScrapeRun>(`/scrape-runs/${runId}/resume`);
+export const deleteScrapeRun = (projectId: string, runId: string) => api.delete(`/projects/${projectId}/scrape-runs/${runId}`);
 
 
 

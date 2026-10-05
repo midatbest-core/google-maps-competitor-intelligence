@@ -101,3 +101,24 @@ def test_scrape_api_authorization():
     # Restore overrides for other tests
     app.dependency_overrides[get_current_workspace] = override_get_current_workspace
     app.dependency_overrides[get_current_user] = override_get_current_user
+
+def test_delete_scrape_run():
+    # Create project
+    create_res = client.post("/projects", json={"name": "Delete Run Test Project"})
+    proj_id = create_res.json()["id"]
+
+    # Add run
+    start_res = client.post(f"/projects/{proj_id}/scrape")
+    run_id = start_res.json()["id"]
+
+    # Delete run
+    del_res = client.delete(f"/projects/{proj_id}/scrape-runs/{run_id}")
+    assert del_res.status_code == 204
+
+    # Run should not be found
+    get_res = client.get(f"/scrape-runs/{run_id}")
+    assert get_res.status_code == 404
+
+    # Deleting again returns 404
+    del_res2 = client.delete(f"/projects/{proj_id}/scrape-runs/{run_id}")
+    assert del_res2.status_code == 404

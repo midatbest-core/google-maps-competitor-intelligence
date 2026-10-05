@@ -118,11 +118,24 @@ async def scrape_job(ctx, run_id: str):
         db.commit()
         logger.info(f"Finished scrape job for run {run_id} with status {final_status}")
     except Exception as e:
-        logger.exception("Error in worker job")
+        logger.exception(f"Error in worker job for run {run_id}: {e}")
         db.rollback()
+        # Persist FAILED status to avoid stale QUEUED runs
+        try:
+            failed_run = db.query(ScrapeRun).filter(ScrapeRun.id == run_id).first()
+            if failed_run:
+                failed_run.status = "FAILED"
+                failed_run.end_time = datetime.now(timezone.utc)
+                db.commit()
+        except Exception as inner_e:
+            logger.error(f"Failed to persist FAILED status for run {run_id}: {inner_e}")
     finally:
         if not ctx:
-            await adapter.close() # cleanup if created locally
+            try:
+                import asyncio
+                asyncio.create_task(adapter.close())
+            except Exception:
+                pass
         db.close()
 
 

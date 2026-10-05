@@ -1,4 +1,4 @@
-﻿from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session
 from app.repositories.scrape_repo import ScrapeRunRepository, ScrapeRunCompetitorRepository
 from app.repositories.project_repo import ProjectRepository
 from app.models.scrape import ScrapeRun, ScrapeRunCompetitor
@@ -32,6 +32,38 @@ class ScrapeService:
         self._verify_project(project_id)
         logger.info(f"Creating scrape run for project {project_id}")
 
+        # Handle stale runs & prevent duplicates
+        from datetime import datetime, timezone, timedelta
+        now = datetime.now(timezone.utc)
+
+        active_runs = self.db.query(ScrapeRun).filter(
+            ScrapeRun.project_id == project_id,
+            ScrapeRun.status.in_(["QUEUED", "RUNNING", "RETRYING"])
+        ).all()
+
+        for r in active_runs:
+            r_created_at = r.created_at.replace(tzinfo=timezone.utc) if r.created_at.tzinfo is None else r.created_at
+            time_since_creation = (now - r_created_at).total_seconds()
+
+            if r.status == "QUEUED" and time_since_creation > 300: # 5 mins stale
+                r.status = "FAILED"
+                r.error_logs = ["Marked as FAILED due to being stuck in QUEUED"]
+                r.end_time = now
+            elif r.status in ["RUNNING", "RETRYING"] and r.start_time:
+                r_start_time = r.start_time.replace(tzinfo=timezone.utc) if r.start_time.tzinfo is None else r.start_time
+                if (now - r_start_time).total_seconds() > 3600: # 1 hour stale
+                    r.status = "FAILED"
+                    r.error_logs = ["Marked as FAILED due to timeout"]
+                    r.end_time = now
+                else:
+                    self.db.rollback()
+                    raise ValueError(f"Project already has an active run ({r.status})")
+            else:
+                self.db.rollback()
+                raise ValueError(f"Project already has an active run ({r.status})")
+
+        self.db.commit()
+
         # 1. Create Run
         run = self.scrape_run_repo.create({
             "project_id": project_id,
@@ -59,6 +91,21 @@ class ScrapeService:
     def get_runs_for_project(self, project_id: str) -> list[ScrapeRun]:
         self._verify_project(project_id)
         return self.scrape_run_repo.get_runs_for_project(project_id)
+
+    def delete_run(self, project_id: str, run_id: str) -> None:
+        self._verify_project(project_id)
+        run = self.scrape_run_repo.get(run_id)
+        if not run:
+            raise ValueError("Run not found")
+        if run.project_id != project_id:
+            raise ValueError("Run not found")
+
+        # Check if safe to delete
+        if run.status in ["RUNNING", "RETRYING", "STARTED"]:
+            raise ValueError("Cannot delete an active run")
+
+        self.db.delete(run)
+        self.db.commit()
 
     def resume_run(self, run_id: str) -> ScrapeRun | None:
         run = self.scrape_run_repo.get(run_id)
@@ -123,4 +170,3 @@ class ScrapeService:
             next_run_local += timedelta(days=1)
 
         return next_run_local.astimezone(timezone.utc)
-

@@ -89,7 +89,12 @@ async def test_project_lifecycle():
     c4_res = client.post(f"/projects/{project_id}/competitors", json={"business_name": "No_Data Biz", "google_maps_url": "http://g.co/4"})
     assert c4_res.status_code == 201
 
-    # 4. Start Scrape
+    # 4. Clear auto-triggered runs from discovery
+    runs = client.get(f"/projects/{project_id}/scrape-runs").json()
+    for r in runs:
+        client.delete(f"/projects/{project_id}/scrape-runs/{r['id']}")
+
+    # Start Scrape manually now that all 4 competitors exist
     scrape_res = client.post(f"/projects/{project_id}/scrape")
     assert scrape_res.status_code == 202
     run_id = scrape_res.json()["id"]

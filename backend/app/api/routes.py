@@ -117,6 +117,12 @@ def get_project_scrape_runs(project_id: str, service: ScrapeService = Depends(ge
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+@project_router.delete("/{project_id}/scrape-runs/{run_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project_scrape_run(project_id: str, run_id: str, service: ScrapeService = Depends(get_scrape_service)):
+    try:
+        service.delete_run(project_id, run_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 # Schedule endpoints removed
 
 @project_router.get("/{project_id}/posts", response_model=PostListResponse)
