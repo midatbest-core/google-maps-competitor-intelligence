@@ -34,6 +34,12 @@ async def mock_get_redis_pool():
 
 routes.get_redis_pool = mock_get_redis_pool
 
+async def mock_scrape_job(*args, **kwargs):
+    pass
+routes.scrape_job = mock_scrape_job
+import app.api.discovery as discovery
+discovery.scrape_job = mock_scrape_job
+
 from app.core.database import engine
 from app.models.base import Base
 # Make sure models are registered

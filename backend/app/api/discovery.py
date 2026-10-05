@@ -43,8 +43,11 @@ def list_candidates(project_id: str, skip: int = 0, limit: int = 50, service: Di
         limit = 100
     return service.get_candidates(project_id, skip=skip, limit=limit)
 
+from fastapi import BackgroundTasks
+from app.workers.main import scrape_job
+
 @discovery_router.post("/projects/{project_id}/discovery-candidates/{candidate_id}/select", response_model=CompetitorResponse)
-async def select_candidate(project_id: str, candidate_id: str, service: DiscoveryService = Depends(get_discovery_service), scrape_service: ScrapeService = Depends(get_scrape_service)):
+async def select_candidate(project_id: str, candidate_id: str, background_tasks: BackgroundTasks, service: DiscoveryService = Depends(get_discovery_service), scrape_service: ScrapeService = Depends(get_scrape_service)):
     try:
         comp = service.select_candidate(project_id, candidate_id)
     except ValueError as e:
@@ -52,9 +55,7 @@ async def select_candidate(project_id: str, candidate_id: str, service: Discover
         
     try:
         run = scrape_service.create_scrape_run(project_id)
-        pool = await get_redis_pool()
-        await pool.enqueue_job("scrape_job", run.id)
-        await pool.close()
+        background_tasks.add_task(scrape_job, None, run.id)
     except Exception:
         pass
 
@@ -69,7 +70,7 @@ def reject_candidate(project_id: str, candidate_id: str, service: DiscoveryServi
         raise HTTPException(status_code=404, detail=str(e))
 
 @discovery_router.post("/projects/{project_id}/competitors/direct", response_model=CompetitorResponse)
-async def add_direct_competitor(project_id: str, payload: DirectCompetitorCreate, service: DiscoveryService = Depends(get_discovery_service), scrape_service: ScrapeService = Depends(get_scrape_service)):
+async def add_direct_competitor(project_id: str, payload: DirectCompetitorCreate, background_tasks: BackgroundTasks, service: DiscoveryService = Depends(get_discovery_service), scrape_service: ScrapeService = Depends(get_scrape_service)):
     try:
         comp = service.add_direct_competitor(project_id, payload)
     except ValueError as e:
@@ -77,9 +78,7 @@ async def add_direct_competitor(project_id: str, payload: DirectCompetitorCreate
         
     try:
         run = scrape_service.create_scrape_run(project_id)
-        pool = await get_redis_pool()
-        await pool.enqueue_job("scrape_job", run.id)
-        await pool.close()
+        background_tasks.add_task(scrape_job, None, run.id)
     except Exception:
         pass
         

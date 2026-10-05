@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
-import { getScrapeRuns, startScrape, getScrapeRun, resumeScrapeRun, getScrapeSchedule, updateScrapeSchedule } from '../api';
-import type { ScrapeRun, ScrapeRunCompetitor, ScrapeSchedule } from '../api';
+import { getScrapeRuns, startScrape, getScrapeRun, resumeScrapeRun } from '../api';
+import type { ScrapeRun, ScrapeRunCompetitor } from '../api';
 import './ProjectScraping.css';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -34,32 +34,6 @@ const ProjectScraping: React.FC = () => {
   
   const pollTimerRef = useRef<number | null>(null);
 
-  const [schedule, setSchedule] = useState<ScrapeSchedule | null>(null);
-  const [showScheduleEditor, setShowScheduleEditor] = useState(false);
-  const [scheduleForm, setScheduleForm] = useState({
-    time_of_day: '09:00',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
-  });
-  const [savingSchedule, setSavingSchedule] = useState(false);
-
-  const fetchSchedule = async () => {
-    if (!projectId) return;
-    try {
-      const schedRes = await getScrapeSchedule(projectId);
-      if (schedRes.data) {
-        setSchedule(schedRes.data);
-        setScheduleForm({
-          time_of_day: schedRes.data.time_of_day,
-          timezone: schedRes.data.timezone
-        });
-      }
-    } catch (err: any) {
-      if (err.response?.status !== 404) {
-        console.error('Failed to load schedule', err);
-      }
-      setSchedule(null);
-    }
-  };
 
   const fetchRuns = async () => {
     try {
@@ -89,26 +63,6 @@ const ProjectScraping: React.FC = () => {
     }
   };
 
-  const handleSaveSchedule = async (enabled?: boolean) => {
-    if (!projectId) return;
-    setSavingSchedule(true);
-    try {
-      const isEnabled = enabled !== undefined ? enabled : (schedule?.enabled ?? true);
-      const res = await updateScrapeSchedule(projectId, {
-        enabled: isEnabled,
-        frequency: 'DAILY',
-        time_of_day: scheduleForm.time_of_day,
-        timezone: scheduleForm.timezone
-      });
-      setSchedule(res.data);
-      setShowScheduleEditor(false);
-    } catch (err: any) {
-      console.error(err);
-      setError(err.response?.data?.detail || 'Failed to update schedule');
-    } finally {
-      setSavingSchedule(false);
-    }
-  };
 
   const fetchActiveRunDetails = async () => {
     if (!activeRunId) return;
@@ -145,7 +99,6 @@ const ProjectScraping: React.FC = () => {
 
   useEffect(() => {
     if (projectId) {
-      fetchSchedule();
       fetchRuns();
     }
     return () => stopPolling();
@@ -242,70 +195,7 @@ const ProjectScraping: React.FC = () => {
 
         <div className="scraping-content">
           <div className="scraping-sidebar">
-            <div className="schedule-card" style={{ padding: '1rem', background: '#2c2e33', borderRadius: '8px', marginBottom: '1.5rem', border: '1px solid #3f4148' }}>
-              <div className="schedule-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1rem' }}>Scheduled Scraping</h3>
-                <span className={`status-badge ${schedule?.enabled ? 'status-success' : 'status-default'}`}>
-                  {schedule?.enabled ? 'Enabled' : 'Disabled'}
-                </span>
-              </div>
-              
-              {showScheduleEditor ? (
-                <div className="schedule-editor">
-                  <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#9ba1a6' }}>Schedule</label>
-                    <select disabled style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', background: '#1c1d21', border: '1px solid #3f4148', color: '#fff' }}><option>Every day</option></select>
-                  </div>
-                  <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#9ba1a6' }}>Time</label>
-                    <input type="time" value={scheduleForm.time_of_day} onChange={e => setScheduleForm({...scheduleForm, time_of_day: e.target.value})} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', background: '#1c1d21', border: '1px solid #3f4148', color: '#fff' }} />
-                  </div>
-                  <div className="form-group" style={{ marginBottom: '1rem' }}>
-                    <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem', color: '#9ba1a6' }}>Timezone</label>
-                    <select value={scheduleForm.timezone} onChange={e => setScheduleForm({...scheduleForm, timezone: e.target.value})} style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', background: '#1c1d21', border: '1px solid #3f4148', color: '#fff' }}>
-                      <option value="Asia/Kolkata">Asia/Kolkata</option>
-                      <option value="UTC">UTC</option>
-                      <option value="Asia/Singapore">Asia/Singapore</option>
-                      <option value="Europe/London">Europe/London</option>
-                      <option value="Europe/Berlin">Europe/Berlin</option>
-                      <option value="America/New_York">America/New_York</option>
-                      <option value="America/Chicago">America/Chicago</option>
-                      <option value="America/Denver">America/Denver</option>
-                      <option value="America/Los_Angeles">America/Los_Angeles</option>
-                    </select>
-                  </div>
-                  <div className="schedule-actions" style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button className="btn-secondary" onClick={() => setShowScheduleEditor(false)} style={{ flex: 1, padding: '0.5rem' }}>Cancel</button>
-                    <button className="btn-primary" onClick={() => handleSaveSchedule(true)} disabled={savingSchedule} style={{ flex: 1, padding: '0.5rem' }}>Save Schedule</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="schedule-info" style={{ fontSize: '0.9rem' }}>
-                  {schedule ? (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span style={{ color: '#9ba1a6' }}>Frequency:</span> <span>Every day</span></div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span style={{ color: '#9ba1a6' }}>Time:</span> <span>{schedule.time_of_day}</span></div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span style={{ color: '#9ba1a6' }}>Timezone:</span> <span>{schedule.timezone}</span></div>
-                      {schedule.enabled && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span style={{ color: '#9ba1a6' }}>Next run:</span> <span>{schedule.next_run_at ? new Date(schedule.next_run_at).toLocaleString() : 'N/A'}</span></div>
-                      )}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}><span style={{ color: '#9ba1a6' }}>Last run:</span> <span>{schedule.last_run_at ? new Date(schedule.last_run_at).toLocaleString() : 'Never'}</span></div>
-                      <div className="schedule-actions" style={{ display: 'flex', gap: '0.5rem' }}>
-                        <button className="btn-secondary" onClick={() => setShowScheduleEditor(true)} style={{ flex: 1, padding: '0.5rem' }}>Edit Schedule</button>
-                        <button className={schedule.enabled ? 'btn-warning' : 'btn-primary'} onClick={() => handleSaveSchedule(!schedule.enabled)} disabled={savingSchedule} style={{ flex: 1, padding: '0.5rem' }}>
-                          {schedule.enabled ? 'Disable' : 'Enable'}
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p style={{ color: '#9ba1a6', marginBottom: '1rem' }}>No schedule configured.</p>
-                      <button className="btn-secondary" onClick={() => setShowScheduleEditor(true)} style={{ width: '100%', padding: '0.5rem' }}>Configure Schedule</button>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+
 
             <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem' }}>Recent Runs</h3>
             {runs.length === 0 ? (

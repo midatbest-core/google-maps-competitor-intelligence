@@ -79,7 +79,7 @@ async def add_competitor(project_id: str, competitor: CompetitorCreate, service:
         comp = service.add_competitor(project_id, competitor)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-        
+
     try:
         run = scrape_service.create_scrape_run(project_id)
         pool = await get_redis_pool()
@@ -97,18 +97,17 @@ def get_competitors(project_id: str, service: ProjectService = Depends(get_proje
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+from fastapi import BackgroundTasks
+from app.workers.main import scrape_job
+
 @project_router.post("/{project_id}/scrape", response_model=ScrapeRunResponse, status_code=status.HTTP_202_ACCEPTED)
-async def start_scrape(project_id: str, service: ScrapeService = Depends(get_scrape_service)):
+async def start_scrape(project_id: str, background_tasks: BackgroundTasks, service: ScrapeService = Depends(get_scrape_service)):
     try:
         run = service.create_scrape_run(project_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-    try:
-        pool = await get_redis_pool()
-        await pool.enqueue_job("scrape_job", run.id)
-        await pool.close()
-    except Exception as e:
-        pass # Handle gracefully instead of failing if redis is offline
+
+    background_tasks.add_task(scrape_job, None, run.id)
     return run
 
 @project_router.get("/{project_id}/scrape-runs", response_model=list[ScrapeRunResponse])
@@ -118,24 +117,7 @@ def get_project_scrape_runs(project_id: str, service: ScrapeService = Depends(ge
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-@project_router.get("/{project_id}/scrape-schedule", response_model=ScrapeScheduleResponse)
-def get_scrape_schedule(project_id: str, service: ScrapeService = Depends(get_scrape_service)):
-    try:
-        schedule = service.get_schedule(project_id)
-        if not schedule:
-            raise HTTPException(status_code=404, detail="Schedule not found")
-        return schedule
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-@project_router.put("/{project_id}/scrape-schedule", response_model=ScrapeScheduleResponse)
-def update_scrape_schedule(project_id: str, schedule_in: ScrapeScheduleUpdate, service: ScrapeService = Depends(get_scrape_service)):
-    try:
-        return service.update_schedule(project_id, schedule_in)
-    except ValueError as e:
-        if "Invalid" in str(e) or "Unsupported" in str(e):
-            raise HTTPException(status_code=422, detail=str(e))
-        raise HTTPException(status_code=404, detail=str(e))
+# Schedule endpoints removed
 
 @project_router.get("/{project_id}/posts", response_model=PostListResponse)
 def get_project_posts(
@@ -214,7 +196,7 @@ def get_scrape_run(run_id: str, service: ScrapeService = Depends(get_scrape_serv
         raise HTTPException(status_code=404, detail=str(e))
 
 @scrape_router.post("/{run_id}/resume", response_model=ScrapeRunResponse)
-async def resume_scrape_run(run_id: str, service: ScrapeService = Depends(get_scrape_service)):
+async def resume_scrape_run(run_id: str, background_tasks: BackgroundTasks, service: ScrapeService = Depends(get_scrape_service)):
     try:
         run = service.resume_run(run_id)
         if not run:
@@ -222,11 +204,5 @@ async def resume_scrape_run(run_id: str, service: ScrapeService = Depends(get_sc
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    try:
-        pool = await get_redis_pool()
-        await pool.enqueue_job("scrape_job", run.id)
-        await pool.close()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail="Failed to enqueue resume job")
-
+    background_tasks.add_task(scrape_job, None, run.id)
     return run

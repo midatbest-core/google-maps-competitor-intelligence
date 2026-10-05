@@ -132,19 +132,9 @@ export const getScrapeRuns = (projectId: string) => api.get<ScrapeRun[]>(`/proje
 export const getScrapeRun = (runId: string) => api.get<ScrapeRun>(`/scrape-runs/${runId}`);
 export const resumeScrapeRun = (runId: string) => api.post<ScrapeRun>(`/scrape-runs/${runId}/resume`);
 
-export interface ScrapeSchedule {
-  id: string;
-  project_id: string;
-  enabled: boolean;
-  frequency: string;
-  time_of_day: string;
-  timezone: string;
-  next_run_at?: string;
-  last_run_at?: string;
-}
 
-export const getScrapeSchedule = (projectId: string) => api.get<ScrapeSchedule>(`/projects/${projectId}/scrape-schedule`);
-export const updateScrapeSchedule = (projectId: string, data: Partial<ScrapeSchedule>) => api.put<ScrapeSchedule>(`/projects/${projectId}/scrape-schedule`, data);
+
+
 
 // Posts and Analytics
 

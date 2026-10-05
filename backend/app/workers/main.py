@@ -83,11 +83,16 @@ async def scrape_job(ctx, run_id: str):
                     if res.status == "NEW_POST":
                         c.new_posts += 1
 
-                    if res.status != "FAILED" and ctx and 'redis' in ctx:
-                        try:
-                            await ctx['redis'].enqueue_job('intelligence_job', res.post_id)
-                        except Exception as e:
-                            logger.error(f"Failed to enqueue intelligence job for {res.post_id}: {e}")
+                    if res.status != "FAILED":
+                        if ctx and 'redis' in ctx:
+                            try:
+                                await ctx['redis'].enqueue_job('intelligence_job', res.post_id)
+                            except Exception as e:
+                                logger.error(f"Failed to enqueue intelligence job for {res.post_id}: {e}")
+                        else:
+                            # Run synchronously or in background if no ARQ
+                            import asyncio
+                            asyncio.create_task(intelligence_job(None, res.post_id))
 
                 db.commit()
             elif result.status == "NO_DATA":
