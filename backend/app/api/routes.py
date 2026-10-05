@@ -123,6 +123,15 @@ def delete_project_scrape_run(project_id: str, run_id: str, service: ScrapeServi
         service.delete_run(project_id, run_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+@project_router.get("/{project_id}/review-intelligence")
+def get_review_intelligence(project_id: str):
+    return {"message": "Not implemented"}
+
+@project_router.post("/{project_id}/review-intelligence")
+def generate_review_intelligence(project_id: str):
+    return {"message": "Not implemented"}
+
 # Schedule endpoints removed
 
 @project_router.get("/{project_id}/posts", response_model=PostListResponse)

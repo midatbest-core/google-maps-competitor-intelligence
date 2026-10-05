@@ -1,0 +1,678 @@
+=== Container DOM Structure (classes only) ===
+<div.m6QErb.DxyBCb.kA9KIf.dS8AEf.XiKgde>
+  <div.aGzt2e>
+    <div.p5hId.r1Nj1c>
+      <button.yaCQre.vkCT6c.THbONb.NIVwne>
+        <img> text=''
+    <div.Mo9Fqf> text=''
+    <div.dExLpf>
+      <button.Dx2nRe>
+        <span.B3iCE.google-symbols.VDEjyc> text='\ue413'
+        <div.fontBodyMedium.YkuOqf> text='See photos'
+  <div.TIHn2>
+    <div.tAiQdd>
+      <div.lMbq3e>
+        <div>
+          <div.zvLtDc> text=''
+          <h1.DUwDvf.lfPIob>
+            <span.G0bp3e> text=''
+        <h2.bwoZTb.fontBodyMedium>
+          <span> text='बॉम्बे स्वीट शॉप & क'
+        <div.LBgpqf>
+          <div.skqShb>
+            <div.fontBodyMedium.dmRWX>
+              <div.ObqRqd> text=''
+              <div.F7nice>
+                <span>
+                  <span> text='4.4'
+                  <span.ceNzKf>
+                    <span.rFrJzc> text=''
+                    <span.rFrJzc> text=''
+                    <span.rFrJzc> text=''
+                    <span.rFrJzc> text=''
+                    <span.rFrJzc.UpDOYb> text=''
+                <span>
+                  <span>
+                    <span> text='(426)'
+              <div.FUc4fe>
+                <div.lyplG> text=''
+            <div.fontBodyMedium>
+              <span>
+                <span>
+                  <button.DkEaL> text='Indian sweets shop'
+        <div.nhS3yb> text=''
+      <div.Owrbee> text=''
+  <div>
+    <div.yx21af.lLU2pe>
+      <div.RWPxGd>
+        <button.hh2c6.G7m0Af>
+          <div.EIgkw.OyjIsf> text=''
+          <div.LRkQ2>
+            <div.G4Y5Vc.OyjIsf> text=''
+            <div.Gpq6kf.NlVald> text='Overview'
+            <div.a52Cae> text=''
+        <button.hh2c6>
+          <div.EIgkw.OyjIsf> text=''
+          <div.LRkQ2>
+            <div.G4Y5Vc.OyjIsf> text=''
+            <div.Gpq6kf.NlVald> text='Reviews'
+            <div.a52Cae> text=''
+  <div.m6QErb.Pf6ghf.XiKgde.ecceSd.tLjsW>
+    <div.etWJQ.jym1ob.HRm8Bc.kdfrQc.WY7ZIb>
+      <button.S9kvJb>
+        <span.DVeyrd>
+          <div.OyjIsf.zemfqc> text=''
+          <span.Cw1rxd.google-symbols.NhBTye.G47vBd> text='\ue52e'
+        <div.R8c4Qb.fontLabelMedium> text='Directions'
+    <div.etWJQ.jym1ob.kdfrQc.WY7ZIb>
+      <button.S9kvJb>
+        <span.DVeyrd>
+          <div.OyjIsf.zemfqc> text=''
+          <span.Cw1rxd.google-symbols.N23lEd> text='\ue866'
+        <div.R8c4Qb.fontLabelMedium> text='Save'
+    <div.etWJQ.jym1ob.kdfrQc.WY7ZIb>
+      <button.S9kvJb>
+        <span.DVeyrd>
+          <div.OyjIsf.zemfqc> text=''
+          <span.Cw1rxd.google-symbols> text='\uf05f'
+        <div.R8c4Qb.fontLabelMedium> text='Nearby'
+    <div.etWJQ.jym1ob.kdfrQc.WY7ZIb>
+      <button.S9kvJb>
+        <span.DVeyrd>
+          <div.OyjIsf.zemfqc> text=''
+          <span.Cw1rxd.google-symbols.G47vBd> text='\ue702'
+        <div.R8c4Qb.fontLabelMedium> text='Send to phone'
+    <div.etWJQ.jym1ob.kdfrQc.WY7ZIb>
+      <button.S9kvJb>
+        <span.DVeyrd>
+          <div.OyjIsf.zemfqc> text=''
+          <span.Cw1rxd.google-symbols> text='\ue80d'
+        <div.R8c4Qb.fontLabelMedium> text='Share'
+  <div.TFQHme> text=''
+  <div.AyRUI> text=''
+  <div.m6QErb.XiKgde>
+    <div> text=''
+    <div> text=''
+    <div.RcCsl.fVHpi.w4vB1d.NOE9ve.M0S7ae.AG25L>
+      <div.DKPXOb.OyjIsf> text=''
+      <button.CsEnBe>
+        <div.AeaXub>
+          <div.cXHGnc>
+            <span.google-symbols.PHazN> text='\ue0c8'
+          <div.rogA2c>
+            <div.Io6YTe.fontBodyMedium.kR99db.fdkmkc> text='Darvesh Royale, Perr'
+            <div.HMy2Jf> text=''
+            <div.gSkmPd.fontBodySmall.CuiGbf.DshQNd> text=''
+      <div.UCw5gc>
+        <div.C9yzub>
+          <div.etWJQ.kdfrQc.NUqjXc>
+            <button.S9kvJb>
+              <span.DVeyrd>
+                <div.OyjIsf.zemfqc> text=''
+                <span.Cw1rxd.google-symbols.SwaGS> text='\ue14d'
+    <div.OqCZI.fontBodyMedium.WVXvdc>
+      <div.OMl5r.hH0dDd.jBYmhd>
+        <div.OyjIsf> text=''
+        <span.LT79uc.google-symbols.PHazN> text='\ue8b5'
+        <div.MkV9>
+          <div.o0Svhf>
+            <span.ZDu9vd>
+              <span>
+                <span> text='Open'
+                <span> text='· Closes 12\u202fam'
+            <span.puWIL.hKrmvd.google-symbols.OazX1c> text='\ue5cf'
+      <div.t39EBf.GUrTXd>
+        <div>
+          <table.eK4R0e.fontBodyMedium>
+            <tbody>
+              <tr.y0skZc>
+                <td.ylH6lf.fontTitleSmall>
+                  <div> text='Monday'
+                <td.mxowUb>
+                  <ul.fontTitleSmall>
+                    <li.G8aQO> text='9\u202fam–12\u202fam'
+                <td.HuudEc>
+                  <button.mWUh3d>
+                    <div.OyjIsf.zemfqc> text=''
+                    <span.GYnni.google-symbols> text='\ue14d'
+              <tr.y0skZc>
+                <td.ylH6lf>
+                  <div> text='Tuesday'
+                <td.mxowUb>
+                  <ul>
+                    <li.G8aQO> text='9\u202fam–12\u202fam'
+                <td.HuudEc>
+                  <button.mWUh3d>
+                    <div.OyjIsf.zemfqc> text=''
+                    <span.GYnni.google-symbols> text='\ue14d'
+              <tr.y0skZc>
+                <td.ylH6lf>
+                  <div> text='Wednesday'
+                <td.mxowUb>
+                  <ul>
+                    <li.G8aQO> text='9\u202fam–12\u202fam'
+                <td.HuudEc>
+                  <button.mWUh3d>
+                    <div.OyjIsf.zemfqc> text=''
+                    <span.GYnni.google-symbols> text='\ue14d'
+              <tr.y0skZc>
+                <td.ylH6lf>
+                  <div> text='Thursday'
+                <td.mxowUb>
+                  <ul>
+                    <li.G8aQO> text='9\u202fam–12\u202fam'
+                <td.HuudEc>
+                  <button.mWUh3d>
+                    <div.OyjIsf.zemfqc> text=''
+                    <span.GYnni.google-symbols> text='\ue14d'
+              <tr.y0skZc>
+                <td.ylH6lf>
+                  <div> text='Friday'
+                <td.mxowUb>
+                  <ul>
+                    <li.G8aQO> text='9\u202fam–12\u202fam'
+                <td.HuudEc>
+                  <button.mWUh3d>
+                    <div.OyjIsf.zemfqc> text=''
+                    <span.GYnni.google-symbols> text='\ue14d'
+              <tr.y0skZc>
+                <td.ylH6lf>
+                  <div> text='Saturday'
+                <td.mxowUb>
+                  <ul>
+                    <li.G8aQO> text='9\u202fam–12\u202fam'
+                <td.HuudEc>
+                  <button.mWUh3d>
+                    <div.OyjIsf.zemfqc> text=''
+                    <span.GYnni.google-symbols> text='\ue14d'
+              <tr.y0skZc>
+                <td.ylH6lf>
+                  <div> text='Sunday'
+                <td.mxowUb>
+                  <ul>
+                    <li.G8aQO> text='9\u202fam–12\u202fam'
+                <td.HuudEc>
+                  <button.mWUh3d>
+                    <div.OyjIsf.zemfqc> text=''
+                    <span.GYnni.google-symbols> text='\ue14d'
+          <div.onOnO>
+            <div.yZqXOc>
+              <button.uj73Ce>
+                <div.jY3aYc.h4UeFd.gqmIDf>
+                  <div.OyjIsf.zemfqc> text=''
+                  <span.CpfJee.fontTitleSmall> text='Suggest new hours'
+      <div.z6qSc.GUrTXd>
+        <div>
+          <div> text=''
+          <div.uLQcoc> text=''
+    <div.RcCsl.fVHpi.w4vB1d.NOE9ve.M0S7ae.AG25L>
+      <div.DKPXOb.OyjIsf> text=''
+      <button.CsEnBe>
+        <div.AeaXub>
+          <div.cXHGnc>
+            <span.google-symbols.NhBTye.PHazN> text='\ue878'
+          <div.rogA2c>
+            <div.Io6YTe.fontBodyMedium.kR99db.fdkmkc> text='Find a table'
+            <div.HMy2Jf> text=''
+            <div.gSkmPd.fontBodySmall.CuiGbf.DshQNd> text=''
+      <div.UCw5gc>
+        <div.C9yzub> text=''
+    <div.RcCsl.fVHpi.w4vB1d.NOE9ve.M0S7ae.AG25L>
+      <div.DKPXOb.OyjIsf> text=''
+      <a.CsEnBe>
+        <div.AeaXub>
+          <div.cXHGnc>
+            <span.google-symbols.PHazN> text='\ue80b'
+          <div.rogA2c.ITvuef>
+            <div.Io6YTe.fontBodyMedium.kR99db.fdkmkc> text='bombaysweetshop.com'
+            <div.HMy2Jf> text=''
+            <div.gSkmPd.fontBodySmall.CuiGbf.DshQNd> text=''
+      <div.UCw5gc>
+        <div.C9yzub>
+          <div.etWJQ.kdfrQc.NUqjXc>
+            <a.lcr4fd.S9kvJb>
+              <span.DVeyrd>
+                <div.OyjIsf.zemfqc> text=''
+                <span.Cw1rxd.google-symbols.G47vBd.SwaGS> text='\ue89e'
+          <div.etWJQ.kdfrQc.NUqjXc>
+            <button.S9kvJb>
+              <span.DVeyrd>
+                <div.OyjIsf.zemfqc> text=''
+                <span.Cw1rxd.google-symbols.SwaGS> text='\ue14d'
+    <div.RcCsl.fVHpi.w4vB1d.NOE9ve.M0S7ae.AG25L>
+      <div.DKPXOb.OyjIsf> text=''
+      <button.CsEnBe>
+        <div.AeaXub>
+          <div.cXHGnc>
+            <span.google-symbols.NhBTye.PHazN> text='\ue0b0'
+          <div.rogA2c>
+            <div.Io6YTe.fontBodyMedium.kR99db.fdkmkc> text='091361 92636'
+            <div.HMy2Jf> text=''
+            <div.gSkmPd.fontBodySmall.CuiGbf.DshQNd> text=''
+      <div.UCw5gc>
+        <div.C9yzub>
+          <div.etWJQ.kdfrQc.NUqjXc>
+            <button.S9kvJb>
+              <span.DVeyrd>
+                <div.OyjIsf.zemfqc> text=''
+                <span.Cw1rxd.google-symbols.SwaGS> text='\ue14d'
+          <div.etWJQ.kdfrQc.NUqjXc>
+            <a.lcr4fd.S9kvJb>
+              <span.DVeyrd>
+                <div.OyjIsf.zemfqc> text=''
+                <span.Cw1rxd.google-symbols.SwaGS> text='\ue0b0'
+    <div.RcCsl.fVHpi.w4vB1d.NOE9ve.M0S7ae.AG25L>
+      <div.DKPXOb.OyjIsf> text=''
+      <button.CsEnBe>
+        <div.AeaXub>
+          <div.cXHGnc>
+            <span.google-symbols.PHazN> text='\uf186'
+          <div.rogA2c>
+            <div.Io6YTe.fontBodyMedium.kR99db.fdkmkc> text='3R5H+PH Mumbai, Maha'
+            <div.HMy2Jf> text=''
+            <div.gSkmPd.fontBodySmall.CuiGbf.DshQNd> text=''
+      <div.UCw5gc>
+        <div.C9yzub>
+          <div.etWJQ.kdfrQc.NUqjXc>
+            <button.S9kvJb>
+              <span.DVeyrd>
+                <div.OyjIsf.zemfqc> text=''
+                <span.Cw1rxd.google-symbols.SwaGS> text='\ue14d'
+          <div.etWJQ.kdfrQc.NUqjXc>
+            <button.S9kvJb>
+              <span.DVeyrd>
+                <div.OyjIsf.zemfqc> text=''
+                <span.Cw1rxd.google-symbols.SwaGS> text='\ue88e'
+  <div.AyRUI> text=''
+  <div.m6QErb.Hk4XGb.QoaCgb.XiKgde.KoSBEe.tLjsW>
+    <div.TrU0dc.kdfrQc.WY7ZIb>
+      <button.S9kvJb>
+        <span.DVeyrd>
+          <div.OyjIsf.zemfqc> text=''
+          <span.Cw1rxd.google-symbols> text='\ue3c9'
+          <span.GMtm7c.fontTitleSmall> text='Suggest an edit'
+  <div.AyRUI> text=''
+  <div.TFQHme> text=''
+  <div.S3NLN>
+    <div.fontHeadlineSmall.zSdcRe.PiF0we> text='From the owner'
+    <div.Q7eoI>
+      <div.SBD2Rc.waIsr>
+        <div.L6Bbsd> text=''
+        <div.jQnbnc.fontBodyMedium.LC9kbb>
+          <div.HYLSGb>
+            <div.QI7YL>
+              <div.sv3F6e.fontTitleSmall> text='Masti, Mithai, aur P'
+            <div.hzT4mb> text='27 Feb - 4 Feb'
+            <div.VpMB0.taHin> text='Some flavours just f'
+          <div.fontBodyMedium.lqMB> text='Feb 27, 2026'
+          <div.dsrqad>
+            <a> text='Order online'
+        <span>
+          <div.EvLOsc> text=''
+  <div.AyRUI> text=''
+  <div.TFQHme> text=''
+  <div.zSdcRe>
+    <h2.kPvgOb.fontHeadlineSmall> text='Photos'
+  <div.h2Jmld.T2Cnde>
+    <div.bho6ae>
+      <button.jtJMuf>
+        <div.ACHQGc>
+          <img> text=''
+        <div.d6JfQc> text=''
+        <label.B8I56d>
+          <span.w74IBc.google-symbols.G47vBd> text='\ue577'
+          <span.fontBodyMedium.gDn65> text=''
+    <div.tmwl5b>
+      <button.jtJMuf>
+        <div.ACHQGc>
+          <img> text=''
+        <div.d6JfQc> text=''
+        <label.B8I56d>
+          <span.fontBodyMedium.gDn65> text='836+ Photos'
+  <div.AyRUI> text=''
+  <div.m6QErb.Hk4XGb.QoaCgb.XiKgde.KoSBEe.tLjsW>
+    <div.TrU0dc.kdfrQc.WY7ZIb>
+      <button.S9kvJb>
+        <span.DVeyrd>
+          <div.OyjIsf.zemfqc> text=''
+          <span.Cw1rxd.google-symbols> text='\ue145'
+          <span.GMtm7c.fontTitleSmall> text='Add photos & videos'
+  <div.AyRUI> text=''
+  <div.TFQHme> text=''
+  <div.zSdcRe>
+    <h2.kPvgOb.fontHeadlineSmall> text='Review summary'
+    <button.Dx2c3c>
+      <span.RzyQj.google-symbols.G47vBd> text='\ue887'
+  <div.vyucnb>
+    <button.oGrB9e>
+      <span.google-symbols.G47vBd.OazX1c> text='\ue887'
+    <div.vzFwxb>
+      <div.zB7yGd.fontBodyMedium>
+        <a.Rcm3v> text='Google policies'
+  <div.PPCwl.cYOgid>
+    <div.Bd93Zb>
+      <div.ExlQHd>
+        <table>
+          <tbody>
+            <tr.BHOKXe>
+              <td.yxmtmf.fontBodyMedium> text='5'
+              <td.ZVa0Ic>
+                <div.XINzN>
+                  <div.oxIpGd> text=''
+            <tr.BHOKXe>
+              <td.yxmtmf.fontBodyMedium> text='4'
+              <td.ZVa0Ic>
+                <div.XINzN>
+                  <div.oxIpGd> text=''
+            <tr.BHOKXe>
+              <td.yxmtmf.fontBodyMedium> text='3'
+              <td.ZVa0Ic>
+                <div.XINzN>
+                  <div.oxIpGd> text=''
+            <tr.BHOKXe>
+              <td.yxmtmf.fontBodyMedium> text='2'
+              <td.ZVa0Ic>
+                <div.XINzN>
+                  <div.oxIpGd> text=''
+            <tr.BHOKXe>
+              <td.yxmtmf.fontBodyMedium> text='1'
+              <td.ZVa0Ic>
+                <div.XINzN>
+                  <div.oxIpGd> text=''
+      <div.jANrlb>
+        <div.fontDisplayLarge> text='4.4'
+        <div.YTkVxc.ikjxab>
+          <div.qxPNJf> text=''
+          <div.qxPNJf> text=''
+          <div.qxPNJf> text=''
+          <div.qxPNJf> text=''
+          <div.qxPNJf.pCqY8> text=''
+        <button.GQjSyb.fontTitleSmall.rqjGif>
+          <div.HHrUdb>
+            <div.OyjIsf> text=''
+            <span> text='426 reviews'
+  <div.AyRUI> text=''
+  <div.tBizfc.fontBodyMedium>
+    <div.DUGVrf>
+      <a.B8AOT> text=''
+    <div.OXD3gb>
+      <div>
+        <span> text='"Small place but goo'
+        <span> text='food'
+        <span> text='and'
+        <span> text='service'
+        <span> text='."'
+  <div.AyRUI> text=''
+  <div.tBizfc.fontBodyMedium>
+    <div.DUGVrf>
+      <a.B8AOT> text=''
+    <div.OXD3gb>
+      <div>
+        <span> text='"Lovely'
+        <span> text='variety'
+        <span> text='of'
+        <span> text='sweets'
+        <span> text='with'
+        <span> text='fusion'
+        <span> text='of indian and wester'
+  <div.AyRUI> text=''
+  <div.m6QErb.Hk4XGb.QoaCgb.XiKgde.KoSBEe.tLjsW>
+    <div.TrU0dc.kdfrQc.WY7ZIb>
+      <button.S9kvJb>
+        <span.DVeyrd>
+          <div.OyjIsf.zemfqc> text=''
+          <span.Cw1rxd.google-symbols> text='\ue560'
+          <span.GMtm7c.fontTitleSmall> text='Write a review'
+  <div.AyRUI> text=''
+  <div.TFQHme> text=''
+  <div.m6QErb.Pf6ghf.XiKgde.KoSBEe.ecceSd.tLjsW>
+    <div.i7mKJb.fontBodyMedium>
+      <div.m3rned>
+        <div.cVwbnc.IlRKB>
+          <div.zSdcRe>
+            <h2.kPvgOb.fontHeadlineSmall> text='Reviews'
+        <div.pV4rW.q8YqMd>
+          <div.etWJQ.yEaq6c.kdfrQc.WY7ZIb>
+            <button.S9kvJb>
+              <span.DVeyrd>
+                <div.OyjIsf.zemfqc> text=''
+                <span.Cw1rxd.google-symbols> text='\ue8b6'
+      <div.MrFZRe.g8q29e>
+        <div.rHSZbb.eczIkc.TNvrDb>
+          <input.yBHhWb.fontBodyLarge.keSVkf.Fcu7Ue.sW8iyd> text=''
+          <label.IM91Ib.fontBodyLarge> text='Search reviews'
+          <label.fontBodySmall.cMSERe> text=''
+          <button.ngnuC>
+            <span.V5VaRe.google-symbols> text='\ue5cd'
+    <div.TrU0dc.yEaq6c.kdfrQc.WY7ZIb>
+      <button.S9kvJb>
+        <span.DVeyrd>
+          <div.OyjIsf.zemfqc> text=''
+          <span.Cw1rxd.google-symbols.G47vBd> text='\ue164'
+          <span.GMtm7c.fontTitleSmall> text='Sort'
+  <div.jftiEf.fontBodyMedium>
+    <div>
+      <div.jJc9Ad>
+        <div>
+          <button.WEBjve>
+            <img.NBa7we> text=''
+        <div.GHT2ce.NsCY4>
+          <div.m44Iib> text=''
+          <div>
+            <div.WNxzHc.qLhwHc>
+              <button.al6Kxe>
+                <div.d4r55.fontTitleMedium> text="Audrey Pereira D'Sou"
+                <div.RfnDt> text='Local Guide · 34 rev'
+            <div.fzE5Re>
+              <div.X1FxEd> text=''
+            <button.PP3Y3d.S1qRNe>
+              <div.zjA77>
+                <div.OyjIsf> text=''
+                <span.eaLgGf.google-symbols> text='\ue5d4'
+        <div.g138K> text=''
+        <div.GHT2ce>
+          <div.DU9Pgb>
+            <span.kvMYJc>
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+            <span.rsqaWe> text='Edited 3 weeks ago'
+            <div.Tuisuc> text=''
+          <div>
+            <div.MyEned>
+              <span.wiI7pd> text='Innovative choices o'
+              <span>
+                <button.w8nwRe.kyuRq> text='More'
+          <div.KtCyie>
+            <button.Tya61d> text=''
+            <button.Tya61d> text=''
+            <button.Tya61d> text=''
+            <button.Tya61d>
+              <div.fontDisplayMedium.Tap5If> text='+6'
+          <div> text=''
+          <div.Upo0Ec>
+            <button.gllhef>
+              <div.GBkF3d>
+                <div.Gd9ibe.OyjIsf> text=''
+                <span.dSlJg.google-symbols> text='\ue8dc'
+                <span.NlVald.znYl0>
+                  <span> text='Like'
+            <button.gllhef>
+              <div.GBkF3d>
+                <div.Gd9ibe.OyjIsf> text=''
+                <span.dSlJg.google-symbols> text='\ue80d'
+                <span.NlVald.znYl0> text='Share'
+  <div.AyRUI> text=''
+  <div.TFQHme> text=''
+  <div.AyRUI> text=''
+  <div.jftiEf.fontBodyMedium>
+    <div>
+      <div.jJc9Ad>
+        <div>
+          <button.WEBjve>
+            <img.NBa7we> text=''
+        <div.GHT2ce.NsCY4>
+          <div.m44Iib> text=''
+          <div>
+            <div.WNxzHc.qLhwHc>
+              <button.al6Kxe>
+                <div.d4r55.fontTitleMedium> text='Aditi Chhajed'
+                <div.RfnDt> text='Local Guide · 12 rev'
+            <div.fzE5Re>
+              <div.X1FxEd> text=''
+            <button.PP3Y3d.S1qRNe>
+              <div.zjA77>
+                <div.OyjIsf> text=''
+                <span.eaLgGf.google-symbols> text='\ue5d4'
+        <div.g138K> text=''
+        <div.GHT2ce>
+          <div.DU9Pgb>
+            <span.kvMYJc>
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+            <span.rsqaWe> text='2 months ago'
+            <div.Tuisuc> text=''
+          <div>
+            <div.MyEned>
+              <span.wiI7pd> text='Bombay Sweet Shop is'
+              <span>
+                <button.w8nwRe.kyuRq> text='More'
+          <div.KtCyie>
+            <button.Tya61d> text=''
+            <button.Tya61d> text=''
+            <button.Tya61d> text=''
+          <div> text=''
+          <div.Upo0Ec>
+            <button.gllhef>
+              <div.GBkF3d>
+                <div.Gd9ibe.OyjIsf> text=''
+                <span.dSlJg.google-symbols> text='\ue8dc'
+                <span.NlVald.znYl0>
+                  <span> text='Like'
+            <button.gllhef>
+              <div.GBkF3d>
+                <div.Gd9ibe.OyjIsf> text=''
+                <span.dSlJg.google-symbols> text='\ue80d'
+                <span.NlVald.znYl0> text='Share'
+          <div.CDe7pd>
+            <div>
+              <span.fontTitleSmall> text='Response from the ow'
+              <span.DZSIDd> text='2 months ago'
+            <div.wiI7pd>
+              <span>
+                <button.w8nwRe.kyuRq> text='More'
+  <div.AyRUI> text=''
+  <div.TFQHme> text=''
+  <div.AyRUI> text=''
+  <div.jftiEf.fontBodyMedium>
+    <div>
+      <div.jJc9Ad>
+        <div>
+          <button.WEBjve>
+            <img.NBa7we> text=''
+        <div.GHT2ce.NsCY4>
+          <div.m44Iib> text=''
+          <div>
+            <div.WNxzHc.qLhwHc>
+              <button.al6Kxe>
+                <div.d4r55.fontTitleMedium> text='Ankur Shah'
+                <div.RfnDt> text='Local Guide · 31 rev'
+            <div.fzE5Re>
+              <div.X1FxEd> text=''
+            <button.PP3Y3d.S1qRNe>
+              <div.zjA77>
+                <div.OyjIsf> text=''
+                <span.eaLgGf.google-symbols> text='\ue5d4'
+        <div.g138K> text=''
+        <div.GHT2ce>
+          <div.DU9Pgb>
+            <span.kvMYJc>
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+              <span.hCCjke.google-symbols.NhBTye.elGi1d> text='\ue838'
+            <span.rsqaWe> text='6 months ago'
+            <div.Tuisuc> text=''
+          <div>
+            <div.MyEned>
+              <span.wiI7pd> text='It’s easily one of m'
+              <span>
+                <button.w8nwRe.kyuRq> text='More'
+          <div.KtCyie>
+            <button.Tya61d> text=''
+            <button.Tya61d> text=''
+            <button.Tya61d> text=''
+            <button.Tya61d>
+              <div.fontDisplayMedium.Tap5If> text='+5'
+          <div> text=''
+          <div.Upo0Ec>
+            <button.gllhef>
+              <div.GBkF3d>
+                <div.Gd9ibe.OyjIsf> text=''
+                <span.dSlJg.google-symbols> text='\ue8dc'
+                <span.NlVald.znYl0>
+                  <span> text='Like'
+            <button.gllhef>
+              <div.GBkF3d>
+                <div.Gd9ibe.OyjIsf> text=''
+                <span.dSlJg.google-symbols> text='\ue80d'
+                <span.NlVald.znYl0> text='Share'
+          <div.CDe7pd>
+            <div>
+              <span.fontTitleSmall> text='Response from the ow'
+              <span.DZSIDd> text='6 months ago'
+            <div.wiI7pd>
+              <span>
+                <button.w8nwRe.kyuRq> text='More'
+  <div.AyRUI> text=''
+  <div.m6QErb.Hk4XGb.QoaCgb.XiKgde.KoSBEe.tLjsW>
+    <div.yZqXOc>
+      <button.uj73Ce>
+        <div.jY3aYc.h4UeFd>
+          <div.OyjIsf.zemfqc> text=''
+          <span.CpfJee.fontTitleSmall> text='More reviews (423)'
+  <div.AyRUI> text=''
+  <div.TFQHme> text=''
+  <div.m6QErb.XiKgde.UhIuC>
+    <div.yZqXOc>
+      <a.uj73Ce>
+        <div.jY3aYc.VV3afe.h4UeFd.gqmIDf>
+          <div.OyjIsf.zemfqc> text=''
+          <span.CpfJee.fontTitleSmall> text='About this data'
+  <div.m6QErb.XiKgde>
+    <div.m6QErb.XiKgde.VrHjaf>
+      <div.S3H0Nb.fontBodyMedium>
+        <span.bgAY2b>
+          <span.google-symbols.OazX1c> text='\ue88e'
+        <span>
+          <button.kyuRq> text='See more'
+
+=== Elements with specific text ===
+Text nodes containing 'ago':
+  Class ['rsqaWe']: 'Edited 3 weeks ago'
+  Class ['rsqaWe']: '2 months ago'
+  Class ['DZSIDd']: '2 months ago'
+  Class ['rsqaWe']: '6 months ago'
+  Class ['DZSIDd']: '6 months ago'
+Links:
+  href: https://bombaysweetshop.com/?utm_source=TTB_GMB_Bandra&utm_medium=TTB_GMB_Bandra&utm_campaign=TTB_GM (classes: ['CsEnBe'])
+  href: https://bombaysweetshop.com/?utm_source=TTB_GMB_Bandra&utm_medium=TTB_GMB_Bandra&utm_campaign=TTB_GM (classes: ['lcr4fd', 'S9kvJb'])
+  href: tel:09136192636 (classes: ['lcr4fd', 'S9kvJb'])
+  href: https://bombaysweetshop.com/collections/holi-specials (classes: None)
+  href: https://support.google.com/contributionpolicy/answer/7400114?ref_topic=7422769 (classes: ['Rcm3v'])
+  href: https://www.google.com/maps/contrib/102074202649879595954?hl=en-IN (classes: ['B8AOT'])
+  href: https://www.google.com/maps/contrib/116940514876400681147?hl=en-IN (classes: ['B8AOT'])
+  href: https://support.google.com/local-listings?p=how_google_sources&authuser=0&hl=en (classes: ['uj73Ce'])
+Images:
+  src: https://lh3.googleusercontent.com/gps-cs-s/AHRPTWkkvGZWXSol_XRUNlyl1NJnwoU12uNbubMGtZKRcC1lAzr4ZrlPi (classes: None)
+  src: https://streetviewpixels-pa.googleapis.com/v1/thumbnail?panoid=2ypxwXjxaWDT-yLhhTxq0g&cb_client=sear (classes: None)
+  src: https://lh3.googleusercontent.com/gps-cs-s/AHRPTWnAc8QbQ_QgyXlqLkokYn6xaMZh6HcPACTi-ewiKHN7oG4xvQsnr (classes: None)
+  src: https://lh3.googleusercontent.com/a-/ALV-UjWZK8ABIN1UdaGQy_EXp3IDOPZFZDICU_ZdvSLNY9uRr-AIXzODnw=w36- (classes: ['NBa7we'])
+  src: https://lh3.googleusercontent.com/a/ACg8ocK2ZkMKV2Z9GUSSZwhpelrFdETLIzpI4VYjD633nmNyOk2Lqw=w36-h36-p (classes: ['NBa7we'])
+  src: https://lh3.googleusercontent.com/a-/ALV-UjU6RQheMu_9vaqQEf-7qb9SlxcvgESu7eGI3sCtg7762SqyPxT9EQ=w36- (classes: ['NBa7we'])
