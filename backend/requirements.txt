@@ -1,4 +1,4 @@
-fastapi
+﻿fastapi
 uvicorn
 sqlalchemy
 alembic
@@ -16,3 +16,4 @@ dateparser
 python-jose[cryptography]==3.3.0
 bcrypt
 email-validator
+httpx>=0.24.0
