@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { Link, useLocation } from 'react-router-dom';
 import '../pages/Dashboard.css'; // Reusing dashboard styles for layout
 
@@ -9,7 +8,6 @@ interface AppLayoutProps {
 }
 
 const AppLayout = ({ children, projectId }: AppLayoutProps) => {
-  const { user, logout } = useAuth();
   const location = useLocation();
 
   return (
@@ -43,16 +41,6 @@ const AppLayout = ({ children, projectId }: AppLayoutProps) => {
             </>
           )}
         </nav>
-        <div className="sidebar-footer">
-          <div className="user-info">
-            <div className="avatar">{user?.email?.[0].toUpperCase()}</div>
-            <div className="user-details">
-              <span className="user-name">{user?.full_name || 'User'}</span>
-              <span className="user-ws">Workspace</span>
-            </div>
-          </div>
-          <button onClick={logout} className="logout-btn">Logout</button>
-        </div>
       </aside>
       
       <main className="main-content">
