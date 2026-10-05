@@ -3,6 +3,7 @@ import { useParams, useSearchParams, Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { startGeneration, regenerateContent } from '../api';
 import type { GenerationRequest, GeneratedContentResponse } from '../api';
+import ReviewIntelligence from '../components/ReviewIntelligence';
 import './ProjectGenerate.css';
 
 const ProjectGenerate: React.FC = () => {
@@ -115,7 +116,8 @@ const ProjectGenerate: React.FC = () => {
 
         <div className="studio-layout">
           {/* Form Column */}
-          <div className="studio-form-col">
+          <div className="studio-form-col" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+            {projectId && <ReviewIntelligence projectId={projectId} />}
             <form onSubmit={handleSubmit} className="generate-form">
               <div className="form-group">
                 <label>Generation Mode</label>

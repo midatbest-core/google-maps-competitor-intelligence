@@ -290,3 +290,30 @@ export const getGenerations = (projectId: string, skip = 0, limit = 50) => api.g
 export const getGeneration = (projectId: string, contentId: string) => api.get<GeneratedContentResponse>(`/projects/${projectId}/content/${contentId}`);
 
 export default api;
+
+export interface ReviewIntelligence {
+  id: string;
+  project_id: string;
+  business_id: string;
+  reviews_analyzed_count: number;
+  overall_sentiment?: string;
+  positive_percentage?: number;
+  neutral_percentage?: number;
+  negative_percentage?: number;
+  average_rating?: number;
+  praise_themes?: string[];
+  complaint_themes?: string[];
+  pain_points?: string[];
+  customer_needs?: string[];
+  frequently_mentioned_services?: string[];
+  strengths?: string[];
+  weaknesses?: string[];
+  business_opportunities?: string[];
+  recommended_actions?: string[];
+  analysis_provider?: string;
+  model_version?: string;
+  analyzed_at: string;
+}
+
+export const getReviewIntelligence = (projectId: string) => api.get<ReviewIntelligence>(`/projects/${projectId}/review-intelligence`);
+export const analyzeReviewIntelligence = (projectId: string) => api.post<ReviewIntelligence>(`/projects/${projectId}/review-intelligence`);
