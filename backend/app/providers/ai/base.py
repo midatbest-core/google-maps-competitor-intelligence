@@ -30,3 +30,7 @@ class AIProvider(abc.ABC):
         and the raw response dictionary.
         """
         pass
+
+    @abc.abstractmethod
+    async def analyze_reviews(self, prompt: str, reviews_text: str) -> tuple[Any, dict]:
+        pass

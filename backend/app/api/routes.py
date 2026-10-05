@@ -124,13 +124,26 @@ def delete_project_scrape_run(project_id: str, run_id: str, service: ScrapeServi
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+from app.services.review_service import ReviewService
+from app.providers.ai.factory import get_ai_provider
+
+def get_review_service(db: Session = Depends(get_db)):
+    return ReviewService(db, get_ai_provider())
+
 @project_router.get("/{project_id}/review-intelligence")
-def get_review_intelligence(project_id: str):
-    return {"message": "Not implemented"}
+def get_review_intelligence(project_id: str, service: ReviewService = Depends(get_review_service)):
+    intel = service.get_review_intelligence(project_id)
+    if not intel:
+        raise HTTPException(status_code=404, detail="Review intelligence not found")
+    return intel
 
 @project_router.post("/{project_id}/review-intelligence")
-def generate_review_intelligence(project_id: str):
-    return {"message": "Not implemented"}
+async def generate_review_intelligence(project_id: str, service: ReviewService = Depends(get_review_service)):
+    try:
+        intel = await service.analyze_project_reviews(project_id)
+        return intel
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 # Schedule endpoints removed
 

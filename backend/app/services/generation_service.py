@@ -272,7 +272,22 @@ class GenerationService:
             types_str = ", ".join([f"{t['content_type']} (Gap: {t['gap_score']:.1f})" for t in type_gaps[:settings.GENERATION_MAX_GAPS]])
             context_parts.append(f"Content Type Gaps: {types_str}")
             
+        from app.models.review import ReviewIntelligence
+        review_intel = self.db.query(ReviewIntelligence).filter_by(project_id=project_id).first()
+        if review_intel:
+            context_parts.append("\n=== CUSTOMER REVIEW SIGNALS ===")
+            if review_intel.overall_sentiment:
+                context_parts.append(f"Overall Sentiment: {review_intel.overall_sentiment}")
+            if review_intel.customer_needs and len(review_intel.customer_needs) > 0:
+                context_parts.append(f"Target Customer Needs: {', '.join(review_intel.customer_needs)}")
+            if review_intel.complaint_themes and len(review_intel.complaint_themes) > 0:
+                context_parts.append(f"Repeated Complaints: {', '.join(review_intel.complaint_themes)}")
+            if review_intel.business_opportunities and len(review_intel.business_opportunities) > 0:
+                context_parts.append(f"Unmet Customer Opportunities: {', '.join(review_intel.business_opportunities)}")
+            if review_intel.praise_themes and len(review_intel.praise_themes) > 0:
+                context_parts.append(f"Praised Experiences: {', '.join(review_intel.praise_themes)}")
+
         if not context_parts:
-            return "No clear competitor gaps identified yet."
+            return "No clear competitor gaps or review signals identified yet."
             
         return "\n".join(context_parts)

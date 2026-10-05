@@ -67,3 +67,20 @@ class FakeAIProvider(AIProvider):
             "rationale": "Fake rationale"
         }
         return json.dumps(mock_res), {"raw": "fake"}
+
+    async def analyze_reviews(self, prompt: str, reviews_text: str):
+        from app.schemas.analysis import AIReviewAnalysisResult, SentimentBreakdown
+        res = AIReviewAnalysisResult(
+            overall_sentiment="Positive",
+            sentiment_breakdown=SentimentBreakdown(positive=80.0, neutral=10.0, negative=10.0),
+            praise_themes=["Great service", "Friendly staff"],
+            complaint_themes=["Long wait times"],
+            pain_points=["Hard to find parking"],
+            customer_needs=["Faster delivery"],
+            frequently_mentioned_services=["Coffee", "Pastries"],
+            strengths=["Quality of food"],
+            weaknesses=["Expensive"],
+            business_opportunities=["Catering"],
+            recommended_actions=["Add more seating"]
+        )
+        return res, {"raw": "{}"}
