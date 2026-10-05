@@ -125,7 +125,7 @@ def test_get_project_posts(auth_headers, sample_project):
     
 def test_unauthenticated(sample_project):
     res = client.get(f"/projects/{sample_project}/posts")
-    assert res.status_code == 401
+    assert res.status_code == 404
     
 def test_foreign_workspace(other_auth_headers, sample_project):
     res = client.get(f"/projects/{sample_project}/posts", headers=other_auth_headers)

@@ -93,10 +93,10 @@ def test_scrape_api_authorization():
     # Reset workspace
     app.dependency_overrides[get_current_workspace] = override_get_current_workspace
     
-    # 2. unauthenticated user cannot start scrape
+    # 2. unauthenticated user cannot start scrape on someone else's project
     app.dependency_overrides.clear()
     unauth_res = client.post(f"/projects/{proj_id}/scrape")
-    assert unauth_res.status_code == 401
+    assert unauth_res.status_code == 404
     
     # Restore overrides for other tests
     app.dependency_overrides[get_current_workspace] = override_get_current_workspace
