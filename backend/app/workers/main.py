@@ -5,7 +5,7 @@ from app.core.database import SessionLocal
 from app.models.scrape import ScrapeRun, ScrapeRunCompetitor, ScrapeObservation
 from app.models.post import Post
 from app.scraper.google_maps.adapter import GoogleMapsAdapter
-from arq.connections import RedisSettings
+from app.core.arq import redis_settings_from_url
 from app.services.ingestion_service import IngestionService
 from app.services.media_downloader import SimpleMediaDownloader
 from app.core.storage import LocalStorageProvider
@@ -199,84 +199,15 @@ async def generate_content_job(ctx, content_id: str):
     finally:
         db.close()
 
-async def scheduler_tick(ctx):
-    logger.info("Running scheduler tick")
-    db = SessionLocal()
-    try:
-        from app.services.scrape_service import ScrapeService
-        from sqlalchemy import select
-        from app.models.scrape import ScrapeSchedule, ScrapeRun
-
-        now = datetime.now(timezone.utc)
-
-        schedules = db.scalars(
-            select(ScrapeSchedule)
-            .where(ScrapeSchedule.enabled == True)
-            .where(ScrapeSchedule.next_run_at <= now)
-        ).all()
-
-        service = ScrapeService(db)
-
-        for schedule in schedules:
-            new_next_run_at = service.calculate_next_run(schedule.time_of_day, schedule.timezone, now=now)
-
-            # Atomic claim
-            from sqlalchemy import update
-            stmt = (
-                update(ScrapeSchedule)
-                .where(ScrapeSchedule.id == schedule.id)
-                .where(ScrapeSchedule.next_run_at == schedule.next_run_at)
-                .values(
-                    last_run_at=now,
-                    next_run_at=new_next_run_at
-                )
-            )
-            result = db.execute(stmt)
-
-            if result.rowcount == 0:
-                logger.info(f"Schedule for project {schedule.project_id} already claimed by another worker")
-                db.rollback() # Release any locks
-                continue
-
-            db.commit() # Commit the claim immediately so other workers see it
-
-            # Check for active run
-            active_run = db.scalar(
-                select(ScrapeRun)
-                .where(ScrapeRun.project_id == schedule.project_id)
-                .where(ScrapeRun.status.in_(["QUEUED", "RUNNING", "RETRYING", "PAUSED_MANUAL_INTERVENTION"]))
-                .limit(1)
-            )
-
-            if not active_run:
-                logger.info(f"scheduled_scrape_started: Project {schedule.project_id}")
-                try:
-                    run = service.create_scrape_run(schedule.project_id)
-                    if ctx and 'redis' in ctx:
-                        await ctx['redis'].enqueue_job('scrape_job', run.id)
-                except Exception as e:
-                    logger.error(f"scheduled_scrape_failed: Project {schedule.project_id}: {e}")
-            else:
-                logger.info(f"scheduled_scrape_skipped_active_run: Project {schedule.project_id}")
-
-    except Exception as e:
-        logger.exception("Error in scheduler_tick")
-    finally:
-        db.close()
-
 def get_redis_settings():
-    import urllib.parse
-    parsed = urllib.parse.urlparse(settings.REDIS_URL)
-    host = parsed.hostname or "localhost"
-    port = parsed.port or 6379
-    database = int(parsed.path.strip("/")) if parsed.path and parsed.path.strip("/") else 0
-    password = parsed.password
-    return RedisSettings(host=host, port=port, database=database, password=password)
+    return redis_settings_from_url(
+        settings.REDIS_URL,
+        conn_timeout=1,
+        conn_retries=5,
+    )
 
 class WorkerSettings:
     functions = [scrape_job, intelligence_job, discovery_job, generate_content_job]
-    from arq.cron import cron
-    cron_jobs = [cron(scheduler_tick, minute=set(range(60)))]
     redis_settings = get_redis_settings()
     on_startup = startup
     on_shutdown = shutdown

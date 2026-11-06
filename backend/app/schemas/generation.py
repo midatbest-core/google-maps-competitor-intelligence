@@ -1,9 +1,9 @@
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Literal, Optional, List
 from datetime import datetime
 
 class GenerationRequest(BaseModel):
-    generation_type: str = Field(..., description="IDEA or FULL")
+    generation_type: Literal["IDEA", "FULL"] = Field(..., description="IDEA or FULL")
     count: int = Field(1, ge=1, le=5)
     topic: Optional[str] = None
     content_type: Optional[str] = None

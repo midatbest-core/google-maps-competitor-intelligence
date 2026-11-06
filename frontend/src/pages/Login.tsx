@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../context/auth';
 import api from '../api';
 import './Login.css';
 
@@ -18,13 +18,13 @@ const Login = () => {
     try {
       if (isLogin) {
         const response = await api.post('/auth/login', { email, password });
-        login(response.data.access_token);
+        await login(response.data.access_token);
         window.location.href = '/dashboard';
       } else {
         await api.post('/auth/register', { email, password, full_name: fullName });
         // Automatically login after register
         const loginRes = await api.post('/auth/login', { email, password });
-        login(loginRes.data.access_token);
+        await login(loginRes.data.access_token);
         window.location.href = '/dashboard';
       }
     } catch (err: any) {

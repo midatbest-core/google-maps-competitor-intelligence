@@ -8,23 +8,26 @@ const ReviewIntelligence: React.FC<{ projectId: string }> = ({ projectId }) => {
     const [analyzing, setAnalyzing] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
 
-    const loadData = async () => {
-        try {
-            setLoading(true);
-            const res = await getReviewIntelligence(projectId);
-            setIntelligence(res.data);
-            setError(null);
-        } catch (err: any) {
-            if (err.response?.status !== 404) {
-                setError("Failed to load review intelligence.");
-            }
-        } finally {
-            setLoading(false);
-        }
-    };
-
     useEffect(() => {
-        loadData();
+        let active = true;
+        const loadData = async () => {
+            try {
+                const res = await getReviewIntelligence(projectId);
+                if (!active) return;
+                setIntelligence(res.data);
+                setError(null);
+            } catch (err: unknown) {
+                if (!active) return;
+                const status = err && typeof err === 'object' && 'response' in err
+                    ? (err as { response?: { status?: number } }).response?.status
+                    : undefined;
+                if (status !== 404) setError("Failed to load review intelligence.");
+            } finally {
+                if (active) setLoading(false);
+            }
+        };
+        void loadData();
+        return () => { active = false; };
     }, [projectId]);
 
     const handleAnalyze = async () => {

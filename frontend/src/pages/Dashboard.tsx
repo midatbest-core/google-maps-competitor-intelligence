@@ -17,20 +17,20 @@ const Dashboard = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    loadProjects();
+    let active = true;
+    const loadProjects = async () => {
+      try {
+        const res = await getProjects();
+        if (active) setProjects(res.data);
+      } catch {
+        if (active) setError('Unable to load projects. Please try again.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void loadProjects();
+    return () => { active = false; };
   }, []);
-
-  const loadProjects = async () => {
-    try {
-      setLoading(true);
-      const res = await getProjects();
-      setProjects(res.data);
-    } catch (err) {
-      setError('Unable to load projects. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <AppLayout>

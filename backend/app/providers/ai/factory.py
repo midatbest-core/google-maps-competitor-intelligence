@@ -10,7 +10,11 @@ def get_ai_provider() -> AIProvider:
         return FakeAIProvider()
         
     if settings.AI_PROVIDER == "gemini":
-        return GeminiProvider(api_key=settings.GEMINI_API_KEY)
+        return GeminiProvider(
+            api_key=settings.GEMINI_API_KEY,
+            model=settings.GEMINI_MODEL,
+            timeout_seconds=settings.GEMINI_TIMEOUT_SECONDS,
+        )
     elif settings.AI_PROVIDER == "openai":
         return OpenAIProvider(api_key=settings.OPENAI_API_KEY)
     elif settings.AI_PROVIDER == "fake":

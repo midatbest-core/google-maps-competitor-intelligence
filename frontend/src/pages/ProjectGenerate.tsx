@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
-import { startGeneration, regenerateContent } from '../api';
+import { getGeneration, startGeneration, regenerateContent } from '../api';
 import type { GenerationRequest, GeneratedContentResponse } from '../api';
 import ReviewIntelligence from '../components/ReviewIntelligence';
 import './ProjectGenerate.css';
@@ -38,14 +38,13 @@ const ProjectGenerate: React.FC = () => {
         try {
           const updatedGens = await Promise.all(generations.map(async (g) => {
             if (g.status === 'QUEUED' || g.status === 'RUNNING') {
-              const { getGeneration } = await import('../api');
               const res = await getGeneration(projectId!, g.id);
               return res.data;
             }
             return g;
           }));
           setGenerations(updatedGens);
-        } catch (err: unknown) {
+        } catch {
           // preserve existing flow, do not crash or spam
         }
       }, 3000);

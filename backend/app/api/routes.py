@@ -5,15 +5,13 @@ from app.core.database import get_db
 from app.core.arq import get_redis_pool
 from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate, ProjectSummaryResponse
 from app.schemas.competitor import CompetitorCreate, CompetitorResponse
-from app.schemas.scrape import ScrapeRunResponse, ScrapeScheduleResponse, ScrapeScheduleUpdate
+from app.schemas.scrape import ScrapeRunResponse
 from app.api.dependencies import get_project_service, get_scrape_service
 from app.services.project_service import ProjectService
 from app.services.scrape_service import ScrapeService
-import urllib.parse
-from app.core.config import settings
 from app.schemas.post import PostListResponse, PostResponse
 from app.schemas.analytics import AnalyticsSummaryResponse
-from app.api.dependencies import get_project_service, get_scrape_service, get_post_service, get_analytics_service
+from app.api.dependencies import get_project_service, get_scrape_service, get_post_service, get_analytics_service, get_current_workspace
 from app.services.post_service import PostService
 from app.services.analytics_service import AnalyticsService
 from typing import Optional
@@ -74,19 +72,11 @@ def get_project_summary(project_id: str, service: ProjectService = Depends(get_p
         raise HTTPException(status_code=404, detail=str(e))
 
 @project_router.post("/{project_id}/competitors", response_model=CompetitorResponse, status_code=status.HTTP_201_CREATED)
-async def add_competitor(project_id: str, competitor: CompetitorCreate, service: ProjectService = Depends(get_project_service), scrape_service: ScrapeService = Depends(get_scrape_service)):
+def add_competitor(project_id: str, competitor: CompetitorCreate, service: ProjectService = Depends(get_project_service)):
     try:
         comp = service.add_competitor(project_id, competitor)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
-    try:
-        run = scrape_service.create_scrape_run(project_id)
-        pool = await get_redis_pool()
-        await pool.enqueue_job("scrape_job", run.id)
-        await pool.close()
-    except Exception:
-        pass # Ignore redis errors if worker is down
 
     return comp
 
@@ -97,17 +87,32 @@ def get_competitors(project_id: str, service: ProjectService = Depends(get_proje
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-from fastapi import BackgroundTasks
-from app.workers.main import scrape_job
+async def _enqueue_scrape_run(run, service: ScrapeService) -> None:
+    pool = None
+    try:
+        pool = await get_redis_pool()
+        await pool.enqueue_job("scrape_job", run.id)
+    except Exception as exc:
+        service.mark_enqueue_failed(run.id)
+        raise HTTPException(
+            status_code=503,
+            detail="Scrape queue is unavailable",
+        ) from exc
+    finally:
+        if pool is not None:
+            try:
+                await pool.close()
+            except Exception:
+                pass
 
 @project_router.post("/{project_id}/scrape", response_model=ScrapeRunResponse, status_code=status.HTTP_202_ACCEPTED)
-async def start_scrape(project_id: str, background_tasks: BackgroundTasks, service: ScrapeService = Depends(get_scrape_service)):
+async def start_scrape(project_id: str, service: ScrapeService = Depends(get_scrape_service)):
     try:
         run = service.create_scrape_run(project_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    background_tasks.add_task(scrape_job, None, run.id)
+    await _enqueue_scrape_run(run, service)
     return run
 
 @project_router.get("/{project_id}/scrape-runs", response_model=list[ScrapeRunResponse])
@@ -126,9 +131,18 @@ def delete_project_scrape_run(project_id: str, run_id: str, service: ScrapeServi
 
 from app.services.review_service import ReviewService
 from app.providers.ai.factory import get_ai_provider
+from app.providers.ai.gemini import (
+    GeminiAPIError,
+    GeminiConfigurationError,
+    GeminiResponseError,
+)
+from app.providers.places import GooglePlacesAPIError
 
-def get_review_service(db: Session = Depends(get_db)):
-    return ReviewService(db, get_ai_provider())
+def get_review_service(
+    db: Session = Depends(get_db),
+    workspace=Depends(get_current_workspace),
+):
+    return ReviewService(db, get_ai_provider(), workspace=workspace)
 
 @project_router.get("/{project_id}/review-intelligence")
 def get_review_intelligence(project_id: str, service: ReviewService = Depends(get_review_service)):
@@ -142,6 +156,12 @@ async def generate_review_intelligence(project_id: str, service: ReviewService =
     try:
         intel = await service.analyze_project_reviews(project_id)
         return intel
+    except GeminiConfigurationError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except (GeminiAPIError, GeminiResponseError) as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except GooglePlacesAPIError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -224,7 +244,7 @@ def get_scrape_run(run_id: str, service: ScrapeService = Depends(get_scrape_serv
         raise HTTPException(status_code=404, detail=str(e))
 
 @scrape_router.post("/{run_id}/resume", response_model=ScrapeRunResponse)
-async def resume_scrape_run(run_id: str, background_tasks: BackgroundTasks, service: ScrapeService = Depends(get_scrape_service)):
+async def resume_scrape_run(run_id: str, service: ScrapeService = Depends(get_scrape_service)):
     try:
         run = service.resume_run(run_id)
         if not run:
@@ -232,5 +252,5 @@ async def resume_scrape_run(run_id: str, background_tasks: BackgroundTasks, serv
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
-    background_tasks.add_task(scrape_job, None, run.id)
+    await _enqueue_scrape_run(run, service)
     return run

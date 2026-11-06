@@ -29,7 +29,8 @@ services:
 
   api:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
     environment:
@@ -37,26 +38,38 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-comp_intel}
       - REDIS_URL=redis://redis:6379/0
-      - AI_PROVIDER=${AI_PROVIDER:-fake}
+      - AI_PROVIDER=${AI_PROVIDER:-gemini}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - CORS_ORIGINS=${CORS_ORIGINS:-["http://localhost:5173", "http://127.0.0.1:5173"]}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      - GEMINI_TIMEOUT_SECONDS=${GEMINI_TIMEOUT_SECONDS:-30}
+      - GOOGLE_PLACES_API_KEY=${GOOGLE_PLACES_API_KEY:-}
+      - GOOGLE_PLACES_TIMEOUT_SECONDS=${GOOGLE_PLACES_TIMEOUT_SECONDS:-20}
+      - GOOGLE_PLACES_MAX_SEARCH_PAGES=${GOOGLE_PLACES_MAX_SEARCH_PAGES:-3}
+      - CORS_ORIGINS=${CORS_ORIGINS}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    command: sh -c "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port 8000"
 
   worker:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     environment:
       - APP_ENV=${APP_ENV:-production}
       - SECRET_KEY=${SECRET_KEY}
       - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@db:5432/${POSTGRES_DB:-comp_intel}
       - REDIS_URL=redis://redis:6379/0
-      - AI_PROVIDER=${AI_PROVIDER:-fake}
+      - AI_PROVIDER=${AI_PROVIDER:-gemini}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash-lite}
+      - GEMINI_TIMEOUT_SECONDS=${GEMINI_TIMEOUT_SECONDS:-30}
+      - GOOGLE_PLACES_API_KEY=${GOOGLE_PLACES_API_KEY:-}
+      - GOOGLE_PLACES_TIMEOUT_SECONDS=${GOOGLE_PLACES_TIMEOUT_SECONDS:-20}
+      - GOOGLE_PLACES_MAX_SEARCH_PAGES=${GOOGLE_PLACES_MAX_SEARCH_PAGES:-3}
+      - CORS_ORIGINS=${CORS_ORIGINS}
     depends_on:
       db:
         condition: service_healthy

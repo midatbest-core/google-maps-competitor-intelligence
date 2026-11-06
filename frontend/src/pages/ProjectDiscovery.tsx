@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { getDiscoveryRuns, startDiscovery, getDiscoveryCandidates, selectDiscoveryCandidate, rejectDiscoveryCandidate } from '../api';
@@ -24,43 +24,36 @@ const ProjectDiscovery = () => {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
-  // Selected Run
-  const [selectedRunId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (projectId) {
-      loadRuns();
-      loadCandidates();
-    }
-  }, [projectId]);
-
-  const loadRuns = async () => {
+  const loadRuns = useCallback(async () => {
+    if (!projectId) return;
     try {
-      setLoadingRuns(true);
-      const res = await getDiscoveryRuns(projectId!);
+      const res = await getDiscoveryRuns(projectId);
       setRuns(res.data);
-      if (res.data.length > 0 && !selectedRunId) {
-        // By default we don't strictly filter candidates by run unless we want to,
-        // but let's just load all recent candidates for the project.
-      }
-    } catch (err: any) {
-      console.error(err);
+    } catch {
+      setFormError('Failed to load discovery runs');
     } finally {
       setLoadingRuns(false);
     }
-  };
+  }, [projectId]);
 
-  const loadCandidates = async () => {
+  const loadCandidates = useCallback(async () => {
+    if (!projectId) return;
     try {
-      setLoadingCandidates(true);
-      const res = await getDiscoveryCandidates(projectId!, 0, 100);
+      const res = await getDiscoveryCandidates(projectId, 0, 100);
       setCandidates(res.data);
-    } catch (err: any) {
-      // It's ok if we can't load candidates, runs error is more prominent
+    } catch {
+      setFormError('Failed to load discovery candidates');
     } finally {
       setLoadingCandidates(false);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    // Async external-data synchronization; state updates occur after awaited requests.
+    // oxlint-disable-next-line react/set-state-in-effect
+    void loadRuns();
+    void loadCandidates();
+  }, [loadRuns, loadCandidates]);
 
   const handleStartDiscovery = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -77,7 +70,7 @@ const ProjectDiscovery = () => {
       setFormQuery('');
       setFormLocation('');
       setFormCategory('');
-      loadRuns();
+      await loadRuns();
     } catch (err: any) {
       setFormError(err.response?.data?.detail || 'Failed to start discovery');
     } finally {
@@ -88,8 +81,8 @@ const ProjectDiscovery = () => {
   const handleSelect = async (candidateId: string) => {
     try {
       await selectDiscoveryCandidate(projectId!, candidateId);
-      loadCandidates(); // Refresh candidate statuses
-    } catch (err) {
+      await loadCandidates(); // Refresh candidate statuses
+    } catch {
       alert('Failed to select candidate.');
     }
   };
@@ -97,8 +90,8 @@ const ProjectDiscovery = () => {
   const handleReject = async (candidateId: string) => {
     try {
       await rejectDiscoveryCandidate(projectId!, candidateId);
-      loadCandidates(); // Refresh candidate statuses
-    } catch (err) {
+      await loadCandidates(); // Refresh candidate statuses
+    } catch {
       alert('Failed to reject candidate.');
     }
   };

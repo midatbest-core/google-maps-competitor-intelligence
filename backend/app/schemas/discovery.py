@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from typing import Optional, List
 from datetime import datetime
 
@@ -40,8 +40,7 @@ class DiscoveryRunResponse(BaseModel):
     duplicates_skipped: int
     error_message: Optional[str] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class DiscoveryCandidateResponse(BaseModel):
     id: str
@@ -61,8 +60,7 @@ class DiscoveryCandidateResponse(BaseModel):
     status: str
     relevance_score: Optional[float] = None
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class DirectCompetitorCreate(BaseModel):
     source_identifier: Optional[str] = None

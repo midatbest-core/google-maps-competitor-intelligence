@@ -117,6 +117,19 @@ class ScrapeService:
         self.scrape_run_repo.update(run, {"status": "QUEUED"})
         return run
 
+    def mark_enqueue_failed(self, run_id: str) -> None:
+        run = self.scrape_run_repo.get(run_id)
+        if not run:
+            return
+        self.scrape_run_repo.update(
+            run,
+            {
+                "status": "FAILED",
+                "end_time": datetime.now(timezone.utc),
+                "error_logs": ["Scrape queue is unavailable"],
+            },
+        )
+
     def get_schedule(self, project_id: str):
         self._verify_project(project_id)
         from app.repositories.scrape_repo import ScrapeScheduleRepository

@@ -22,7 +22,8 @@ Copy `.env.example` to `.env` and fill in the production values:
 APP_ENV=production
 LOG_LEVEL=INFO
 DATABASE_URL=postgresql://user:password@db:5432/comp_intel
-REDIS_URL=redis://redis:6379/0
+# Local Redis uses redis://. Upstash must use its TLS rediss:// connection URL.
+REDIS_URL=rediss://default:password@your-upstash-host:6379/0
 
 # Storage (use local for single-instance, S3 for multi-instance)
 STORAGE_PROVIDER=local
@@ -31,6 +32,11 @@ LOCAL_STORAGE_DIR=/app/media
 # AI Providers
 AI_PROVIDER=gemini
 GEMINI_API_KEY=your_key_here
+GEMINI_MODEL=gemini-3.5-flash-lite
+GEMINI_TIMEOUT_SECONDS=30
+GOOGLE_PLACES_API_KEY=your_google_places_api_key_here
+GOOGLE_PLACES_TIMEOUT_SECONDS=20
+GOOGLE_PLACES_MAX_SEARCH_PAGES=3
 
 # Security
 SECRET_KEY=generate_a_secure_random_key

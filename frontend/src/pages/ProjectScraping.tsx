@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { getScrapeRuns, startScrape, getScrapeRun, resumeScrapeRun, deleteScrapeRun } from '../api';
@@ -34,10 +34,17 @@ const ProjectScraping: React.FC = () => {
 
   const pollTimerRef = useRef<number | null>(null);
 
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  }, []);
 
-  const fetchRuns = async () => {
+  const fetchRuns = useCallback(async () => {
+    if (!projectId) return;
     try {
-      const runsRes = await getScrapeRuns(projectId!);
+      const runsRes = await getScrapeRuns(projectId);
 
       const sortedRuns = runsRes.data.sort((a, b) => {
         if (a.start_time && b.start_time) {
@@ -61,10 +68,10 @@ const ProjectScraping: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, activeRunId]);
 
 
-  const fetchActiveRunDetails = async () => {
+  const fetchActiveRunDetails = useCallback(async () => {
     if (!activeRunId) return;
     try {
       const res = await getScrapeRun(activeRunId);
@@ -80,33 +87,30 @@ const ProjectScraping: React.FC = () => {
     } catch (err) {
       console.error('Failed to load run details', err);
     }
-  };
+  }, [activeRunId, stopPolling]);
 
-  const startPolling = () => {
+  const startPolling = useCallback(() => {
     if (pollTimerRef.current) return;
     pollTimerRef.current = window.setInterval(() => {
-      fetchActiveRunDetails();
-      fetchRuns();
+      void fetchActiveRunDetails();
+      void fetchRuns();
     }, 4000);
-  };
-
-  const stopPolling = () => {
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-  };
+  }, [fetchActiveRunDetails, fetchRuns]);
 
   useEffect(() => {
     if (projectId) {
-      fetchRuns();
+      // Async external-data synchronization; state updates occur after awaited requests.
+      // oxlint-disable-next-line react/set-state-in-effect
+      void fetchRuns();
     }
     return () => stopPolling();
-  }, [projectId]);
+  }, [projectId, fetchRuns, stopPolling]);
 
   useEffect(() => {
     if (activeRunId) {
-      fetchActiveRunDetails();
+      // Async external-data synchronization; state updates occur after awaited requests.
+      // oxlint-disable-next-line react/set-state-in-effect
+      void fetchActiveRunDetails();
 
       // If we select a run that is active, start polling
       const run = runs.find(r => r.id === activeRunId);
@@ -116,7 +120,7 @@ const ProjectScraping: React.FC = () => {
         stopPolling();
       }
     }
-  }, [activeRunId]);
+  }, [activeRunId, runs, fetchActiveRunDetails, startPolling, stopPolling]);
 
   const handleStartScrape = async () => {
     if (!projectId) return;

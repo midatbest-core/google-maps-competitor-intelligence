@@ -4,8 +4,7 @@ from app.services.discovery_service import DiscoveryService
 from app.schemas.discovery import DiscoveryRunCreate, DiscoveryRunResponse, DiscoveryCandidateResponse, DirectCompetitorCreate
 from app.schemas.competitor import CompetitorResponse
 from app.core.arq import get_redis_pool
-from app.services.scrape_service import ScrapeService
-from app.api.dependencies import get_discovery_service, get_scrape_service
+from app.api.dependencies import get_discovery_service
 from typing import List
 
 discovery_router = APIRouter(tags=["discovery"])
@@ -43,22 +42,13 @@ def list_candidates(project_id: str, skip: int = 0, limit: int = 50, service: Di
         limit = 100
     return service.get_candidates(project_id, skip=skip, limit=limit)
 
-from fastapi import BackgroundTasks
-from app.workers.main import scrape_job
-
 @discovery_router.post("/projects/{project_id}/discovery-candidates/{candidate_id}/select", response_model=CompetitorResponse)
-async def select_candidate(project_id: str, candidate_id: str, background_tasks: BackgroundTasks, service: DiscoveryService = Depends(get_discovery_service), scrape_service: ScrapeService = Depends(get_scrape_service)):
+def select_candidate(project_id: str, candidate_id: str, service: DiscoveryService = Depends(get_discovery_service)):
     try:
         comp = service.select_candidate(project_id, candidate_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
         
-    try:
-        run = scrape_service.create_scrape_run(project_id)
-        background_tasks.add_task(scrape_job, None, run.id)
-    except Exception:
-        pass
-
     return comp
 
 @discovery_router.post("/projects/{project_id}/discovery-candidates/{candidate_id}/reject", response_model=DiscoveryCandidateResponse)
@@ -70,17 +60,11 @@ def reject_candidate(project_id: str, candidate_id: str, service: DiscoveryServi
         raise HTTPException(status_code=404, detail=str(e))
 
 @discovery_router.post("/projects/{project_id}/competitors/direct", response_model=CompetitorResponse)
-async def add_direct_competitor(project_id: str, payload: DirectCompetitorCreate, background_tasks: BackgroundTasks, service: DiscoveryService = Depends(get_discovery_service), scrape_service: ScrapeService = Depends(get_scrape_service)):
+def add_direct_competitor(project_id: str, payload: DirectCompetitorCreate, service: DiscoveryService = Depends(get_discovery_service)):
     try:
         comp = service.add_direct_competitor(project_id, payload)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-        
-    try:
-        run = scrape_service.create_scrape_run(project_id)
-        background_tasks.add_task(scrape_job, None, run.id)
-    except Exception:
-        pass
         
     return comp
 

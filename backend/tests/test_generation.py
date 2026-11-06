@@ -1,4 +1,7 @@
+import json
+
 import pytest
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.models.profile import BusinessProfile
@@ -11,6 +14,8 @@ from app.providers.embedding.fake import FakeEmbeddingProvider
 from app.models.analysis import AIAnalysis
 from app.models.post import Post
 from app.models.competitor import ProjectCompetitor
+from app.models.review import ReviewIntelligence
+from app.api import generation as generation_api
 
 @pytest.fixture
 def fake_ai_provider():
@@ -58,7 +63,7 @@ async def test_generation_job_idea(db: Session, generation_service):
     assert gc.topic == "Fake Topic"
     assert gc.fingerprint is not None
     assert gc.provider == "fake_provider"
-    assert gc.prompt_version == "v1"
+    assert gc.prompt_version == "v2-review-aware"
 
 @pytest.mark.asyncio
 async def test_generation_job_full_copy(db: Session, generation_service):
@@ -264,4 +269,141 @@ async def test_malformed_ai_output(db: Session, generation_service):
     db.refresh(gc)
     assert gc.status == "FAILED"
     assert "invalid JSON" in gc.error_message
+
+
+@pytest.mark.asyncio
+async def test_generation_uses_reviews_for_selected_business_only(db: Session):
+    class ReviewAwareProvider(FakeAIProvider):
+        def __init__(self):
+            super().__init__()
+            self.prompt = None
+
+        async def generate_content(self, prompt: str):
+            self.prompt = prompt
+            response = {
+                "topic": "Easier pickup planning",
+                "title": "Plan your next pickup",
+                "body": (
+                    "Looking for a smoother visit? Contact us to confirm the best "
+                    "pickup time for your order."
+                ),
+                "keywords": ["pickup", "local service"],
+                "cta": "Contact us",
+                "offer": None,
+                "image_concept": "A prepared order at a pickup counter",
+                "content_type": "Update",
+                "rationale": "Addresses customer feedback about waiting times.",
+            }
+            return json.dumps(response), {"raw": response}
+
+    selected_business = BusinessProfile(business_name="Selected Cafe")
+    unrelated_business = BusinessProfile(business_name="Unrelated Cafe")
+    project = Project(name="Review-Aware Project", own_business=selected_business)
+    db.add_all([project, unrelated_business])
+    db.commit()
+
+    selected_reviews = ReviewIntelligence(
+        project_id=project.id,
+        business_id=selected_business.id,
+        reviews_analyzed_count=5,
+        overall_sentiment="mixed",
+        praise_themes=["Friendly staff"],
+        complaint_themes=["Long pickup waits"],
+        pain_points=["Unclear pickup timing"],
+        customer_needs=["Predictable pickup times"],
+        business_opportunities=["Clarify pickup planning"],
+    )
+    unrelated_reviews = ReviewIntelligence(
+        project_id=project.id,
+        business_id=unrelated_business.id,
+        reviews_analyzed_count=5,
+        praise_themes=["Rooftop seating"],
+        complaint_themes=["Limited parking"],
+        pain_points=["Parking availability"],
+        business_opportunities=["Valet parking"],
+    )
+    db.add_all([selected_reviews, unrelated_reviews])
+    db.commit()
+
+    provider = ReviewAwareProvider()
+    service = GenerationService(db, provider)
+    generated = service.request_generation(
+        project.id,
+        GenerationRequest(generation_type="FULL"),
+    )[0]
+
+    await service.execute_generation(generated.id)
+
+    db.refresh(generated)
+    assert generated.status == "SUCCESS"
+    assert "confirm the best pickup time" in generated.full_copy
+    assert "Business: Selected Cafe" in provider.prompt
+    assert "Customer praise themes: Friendly staff" in provider.prompt
+    assert "Customer complaint themes: Long pickup waits" in provider.prompt
+    assert "Customer pain points: Unclear pickup timing" in provider.prompt
+    assert "Business opportunities: Clarify pickup planning" in provider.prompt
+    assert "Rooftop seating" not in provider.prompt
+    assert "Limited parking" not in provider.prompt
+    assert "Never invent customer opinions" in provider.prompt
+
+
+@pytest.mark.asyncio
+async def test_generation_succeeds_without_review_intelligence(db: Session):
+    class CapturingProvider(FakeAIProvider):
+        def __init__(self):
+            super().__init__()
+            self.prompt = None
+
+        async def generate_content(self, prompt: str):
+            self.prompt = prompt
+            return await super().generate_content(prompt)
+
+    business = BusinessProfile(business_name="No Reviews Cafe")
+    project = Project(name="No Reviews Project", own_business=business)
+    db.add(project)
+    db.commit()
+
+    provider = CapturingProvider()
+    service = GenerationService(db, provider)
+    generated = service.request_generation(
+        project.id,
+        GenerationRequest(generation_type="FULL"),
+    )[0]
+
+    await service.execute_generation(generated.id)
+
+    db.refresh(generated)
+    assert generated.status == "SUCCESS"
+    assert generated.full_copy == "Fake body"
+    assert "CUSTOMER REVIEW EVIDENCE FOR SELECTED BUSINESS" not in provider.prompt
+    assert "When review evidence is absent" in provider.prompt
+
+
+@pytest.mark.asyncio
+async def test_enqueue_failure_marks_unsubmitted_content_failed(db, monkeypatch):
+    async def unavailable_pool():
+        raise ConnectionError("synthetic Redis outage")
+
+    monkeypatch.setattr(generation_api, "get_redis_pool", unavailable_pool)
+    project = Project(name="Queue Failure Project")
+    db.add(project)
+    db.commit()
+    service = GenerationService(db, FakeAIProvider())
+
+    with pytest.raises(HTTPException) as exc_info:
+        await generation_api.start_generation(
+            project.id,
+            GenerationRequest(generation_type="IDEA", count=2),
+            service,
+        )
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "Generation queue is unavailable"
+    records = db.query(GeneratedContent).filter_by(project_id=project.id).all()
+    assert len(records) == 2
+    assert {record.status for record in records} == {"FAILED"}
+    assert all(
+        record.error_message == "Failed to enqueue generation job"
+        for record in records
+    )
 

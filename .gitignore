@@ -1,6 +1,10 @@
 # Environments
 .env
 
+# Captured third-party debug pages can contain embedded public API credentials
+backend/dump.html
+backend/maps_debug.html
+
 # Python
 __pycache__/
 *.py[cod]

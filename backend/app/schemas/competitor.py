@@ -1,9 +1,18 @@
 ﻿from pydantic import BaseModel, ConfigDict
 from typing import Optional
+from pydantic import Field, field_validator
 
 class BusinessProfileBase(BaseModel):
-    business_name: str
+    business_name: str = Field(min_length=1, max_length=300)
     google_maps_url: Optional[str] = None
+
+    @field_validator("business_name")
+    @classmethod
+    def business_name_must_not_be_blank(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("Business name must not be blank")
+        return value
 
 class CompetitorCreate(BusinessProfileBase):
     pass

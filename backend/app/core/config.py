@@ -1,3 +1,6 @@
+from urllib.parse import urlsplit
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
@@ -23,6 +26,11 @@ class Settings(BaseSettings):
     # AI Config
     AI_PROVIDER: str = "fake"
     GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
+    GEMINI_TIMEOUT_SECONDS: float = 30.0
+    GOOGLE_PLACES_API_KEY: str | None = None
+    GOOGLE_PLACES_TIMEOUT_SECONDS: float = 20.0
+    GOOGLE_PLACES_MAX_SEARCH_PAGES: int = 3
     OPENAI_API_KEY: str = ""
     EMBEDDING_PROVIDER: str = "fake"
 
@@ -34,6 +42,34 @@ class Settings(BaseSettings):
     GENERATION_MAX_PROJECT_EXAMPLES: int = 5
     GENERATION_MAX_GAPS: int = 10
     GENERATION_MAX_GENERATED_HISTORY: int = 5
+
+    @model_validator(mode="after")
+    def validate_production_configuration(self):
+        if self.APP_ENV.lower() != "production":
+            return self
+
+        database_scheme = urlsplit(self.DATABASE_URL).scheme
+        if database_scheme not in {"postgresql", "postgresql+psycopg"}:
+            raise ValueError("Production DATABASE_URL must use PostgreSQL")
+
+        if urlsplit(self.REDIS_URL).scheme not in {"redis", "rediss"}:
+            raise ValueError("Production REDIS_URL must use redis:// or rediss://")
+
+        if self.AI_PROVIDER == "gemini" and not self.GEMINI_API_KEY.strip():
+            raise ValueError("GEMINI_API_KEY is required when AI_PROVIDER=gemini")
+        if not (self.GOOGLE_PLACES_API_KEY or "").strip():
+            raise ValueError("GOOGLE_PLACES_API_KEY is required in production")
+
+        if not self.CORS_ORIGINS or any(
+            "localhost" in origin or "127.0.0.1" in origin
+            for origin in self.CORS_ORIGINS
+        ):
+            raise ValueError(
+                "Production CORS_ORIGINS must contain deployed HTTPS origins"
+            )
+        if any(not origin.startswith("https://") for origin in self.CORS_ORIGINS):
+            raise ValueError("Production CORS_ORIGINS must use HTTPS")
+        return self
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

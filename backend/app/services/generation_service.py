@@ -8,6 +8,7 @@ import hashlib
 from app.models.analysis import GeneratedContent, AIAnalysis, PostEmbedding
 from app.models.project import Project
 from app.models.profile import BusinessProfile
+from app.models.review import ReviewIntelligence
 from app.schemas.generation import GenerationRequest, RegenerateRequest, AIStructuredOutput
 from app.providers.ai.base import AIProvider
 from app.providers.embedding.base import EmbeddingProvider
@@ -95,6 +96,21 @@ class GenerationService:
     def list_generated_content(self, project_id: str, skip: int = 0, limit: int = 50) -> List[GeneratedContent]:
         self._verify_project(project_id)
         return self.db.query(GeneratedContent).filter_by(project_id=project_id).order_by(GeneratedContent.created_at.desc()).offset(skip).limit(limit).all()
+
+    def mark_enqueue_failed(self, content_ids: list[str]) -> None:
+        if not content_ids:
+            return
+        self.db.query(GeneratedContent).filter(
+            GeneratedContent.id.in_(content_ids),
+            GeneratedContent.status == "QUEUED",
+        ).update(
+            {
+                GeneratedContent.status: "FAILED",
+                GeneratedContent.error_message: "Failed to enqueue generation job",
+            },
+            synchronize_session=False,
+        )
+        self.db.commit()
 
     async def execute_generation(self, content_id: str):
         gc = self.db.query(GeneratedContent).filter_by(id=content_id).first()
@@ -235,7 +251,12 @@ class GenerationService:
         if not project or not project.own_business:
             return "No business context available."
         bp = project.own_business
-        return f"Business Name: {bp.business_name}\nCategory: {bp.category or 'Unknown'}\nDescription: {bp.description or 'None'}"
+        return "\n".join([
+            f"Business Name: {bp.business_name}",
+            f"Category: {bp.category or 'Unknown'}",
+            f"Address: {bp.address or 'Unknown'}",
+            f"Project Description: {project.description or 'None'}",
+        ])
 
     def _is_semantic_duplicate(self, project_id: str, embedding: List[float], exclude_id: str) -> bool:
         # Check against previous generated content in the same project using SimilarityService
@@ -272,22 +293,57 @@ class GenerationService:
             types_str = ", ".join([f"{t['content_type']} (Gap: {t['gap_score']:.1f})" for t in type_gaps[:settings.GENERATION_MAX_GAPS]])
             context_parts.append(f"Content Type Gaps: {types_str}")
             
-        from app.models.review import ReviewIntelligence
-        review_intel = self.db.query(ReviewIntelligence).filter_by(project_id=project_id).first()
-        if review_intel:
-            context_parts.append("\n=== CUSTOMER REVIEW SIGNALS ===")
-            if review_intel.overall_sentiment:
-                context_parts.append(f"Overall Sentiment: {review_intel.overall_sentiment}")
-            if review_intel.customer_needs and len(review_intel.customer_needs) > 0:
-                context_parts.append(f"Target Customer Needs: {', '.join(review_intel.customer_needs)}")
-            if review_intel.complaint_themes and len(review_intel.complaint_themes) > 0:
-                context_parts.append(f"Repeated Complaints: {', '.join(review_intel.complaint_themes)}")
-            if review_intel.business_opportunities and len(review_intel.business_opportunities) > 0:
-                context_parts.append(f"Unmet Customer Opportunities: {', '.join(review_intel.business_opportunities)}")
-            if review_intel.praise_themes and len(review_intel.praise_themes) > 0:
-                context_parts.append(f"Praised Experiences: {', '.join(review_intel.praise_themes)}")
+        review_context = self._build_review_context(project_id)
+        if review_context:
+            context_parts.append(review_context)
 
         if not context_parts:
             return "No clear competitor gaps or review signals identified yet."
             
         return "\n".join(context_parts)
+
+    def _build_review_context(self, project_id: str) -> str | None:
+        project = self.db.query(Project).filter_by(id=project_id).first()
+        if not project or not project.own_business_id:
+            return None
+
+        review_intel = self.db.query(ReviewIntelligence).filter_by(
+            project_id=project_id,
+            business_id=project.own_business_id,
+        ).order_by(ReviewIntelligence.analyzed_at.desc()).first()
+        if not review_intel:
+            return None
+
+        signals = []
+        review_fields = (
+            ("Overall sentiment", review_intel.overall_sentiment),
+            ("Customer praise themes", review_intel.praise_themes),
+            ("Customer complaint themes", review_intel.complaint_themes),
+            ("Customer pain points", review_intel.pain_points),
+            ("Customer needs", review_intel.customer_needs),
+            ("Business opportunities", review_intel.business_opportunities),
+        )
+        for label, value in review_fields:
+            if isinstance(value, list):
+                clean_values = [str(item).strip() for item in value if str(item).strip()]
+                if clean_values:
+                    signals.append(f"{label}: {', '.join(clean_values)}")
+            elif value:
+                signals.append(f"{label}: {value}")
+
+        if not signals:
+            return None
+
+        business_name = (
+            project.own_business.business_name
+            if project.own_business
+            else "Selected business"
+        )
+        return "\n".join([
+            "\n=== CUSTOMER REVIEW EVIDENCE FOR SELECTED BUSINESS ===",
+            f"Business: {business_name}",
+            "Use these as customer-interest signals, not as verified business facts. "
+            "Do not quote reviews, claim universal customer agreement, or imply that "
+            "complaints were resolved unless the business or campaign context confirms it.",
+            *signals,
+        ])

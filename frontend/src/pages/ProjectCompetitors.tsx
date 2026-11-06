@@ -22,33 +22,33 @@ const ProjectCompetitors = () => {
   const [formError, setFormError] = useState('');
 
   useEffect(() => {
-    if (projectId) {
-      loadData();
-    }
+    if (!projectId) return;
+    let active = true;
+    const loadData = async () => {
+      try {
+        const [compRes, projRes] = await Promise.all([
+          getProjectCompetitors(projectId),
+          getProjectSummary(projectId)
+        ]);
+        if (!active) return;
+        setCompetitors(compRes.data);
+        setOwnBusinessId(projRes.data.project.own_business_id || null);
+      } catch {
+        if (active) setError('Failed to load data');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void loadData();
+    return () => { active = false; };
   }, [projectId]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      const [compRes, projRes] = await Promise.all([
-        getProjectCompetitors(projectId!),
-        getProjectSummary(projectId!)
-      ]);
-      setCompetitors(compRes.data);
-      setOwnBusinessId(projRes.data.project.own_business_id || null);
-    } catch (err: any) {
-      setError('Failed to load data');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const loadCompetitors = async () => {
     // legacy method for reloading just competitors if needed, though loadData is preferred now
     try {
       const compRes = await getProjectCompetitors(projectId!);
       setCompetitors(compRes.data);
-    } catch (err: any) {
+    } catch {
       setError('Failed to load competitors');
     }
   };
@@ -72,9 +72,12 @@ const ProjectCompetitors = () => {
       setFormName('');
       setFormUrl('');
       setFormAddress('');
-      loadCompetitors();
-    } catch (err: any) {
-      setFormError(err.response?.data?.detail || 'Failed to add competitor');
+      await loadCompetitors();
+    } catch (err: unknown) {
+      const detail = err && typeof err === 'object' && 'response' in err
+        ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+        : undefined;
+      setFormError(detail || 'Failed to add competitor');
     } finally {
       setFormSubmitting(false);
     }
@@ -84,7 +87,7 @@ const ProjectCompetitors = () => {
     try {
       await updateProject(projectId!, { own_business_id: businessId });
       setOwnBusinessId(businessId);
-    } catch (err: any) {
+    } catch {
       setError('Failed to update own business');
     }
   };

@@ -25,22 +25,25 @@ const ProjectDashboard = () => {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (projectId) {
-      loadSummary(projectId);
-    }
+    if (!projectId) return;
+    let active = true;
+    const loadSummary = async () => {
+      try {
+        const res = await getProjectSummary(projectId);
+        if (active) setSummary(res.data);
+      } catch (err: unknown) {
+        if (!active) return;
+        const detail = err && typeof err === 'object' && 'response' in err
+          ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
+          : undefined;
+        setError(detail || 'Failed to load project summary');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void loadSummary();
+    return () => { active = false; };
   }, [projectId]);
-
-  const loadSummary = async (id: string) => {
-    try {
-      setLoading(true);
-      const res = await getProjectSummary(id);
-      setSummary(res.data);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load project summary');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   if (loading) {
     return (

@@ -1,6 +1,6 @@
 import json
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2-review-aware"
 
 IDEA_PROMPT_TEMPLATE = """
 You are an expert Google Maps marketing strategist.
@@ -13,6 +13,13 @@ Business Context:
 Competitor & Project Intelligence:
 {intelligence_context}
 
+Customer Evidence Rules:
+- When customer review evidence is present, use relevant signals to choose useful themes and address demonstrated needs.
+- Treat review themes as limited evidence, not proof that every customer shares an opinion.
+- Never invent customer opinions, testimonials, service improvements, offers, or business capabilities.
+- Do not state that a complaint has been fixed unless the Business Context or Campaign/Offer Context confirms it.
+- When review evidence is absent, generate from the remaining context without implying customer feedback exists.
+
 User Constraints:
 Topic: {topic}
 Content Type: {content_type}
@@ -20,7 +27,7 @@ Keywords: {keywords}
 CTA Style: {cta_style}
 Campaign/Offer Context: {campaign_context}
 
-Output your response as a strictly valid JSON array of objects, where each object matches this structure:
+Output your response as one strictly valid JSON object matching this structure:
 {{
   "topic": "The core topic of the idea",
   "title": "A catchy title",
@@ -45,6 +52,13 @@ Business Context:
 
 Competitor & Project Intelligence:
 {intelligence_context}
+
+Customer Evidence Rules:
+- When customer review evidence is present, use relevant signals to choose useful themes and address demonstrated needs.
+- Treat review themes as limited evidence, not proof that every customer shares an opinion.
+- Never invent customer opinions, testimonials, service improvements, offers, or business capabilities.
+- Do not state that a complaint has been fixed unless the Business Context or Campaign/Offer Context confirms it.
+- When review evidence is absent, generate from the remaining context without implying customer feedback exists.
 
 User Constraints:
 Topic: {topic}

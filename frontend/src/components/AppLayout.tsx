@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/auth';
 import '../pages/Dashboard.css'; // Reusing dashboard styles for layout
 
 interface AppLayoutProps {
@@ -9,6 +10,7 @@ interface AppLayoutProps {
 
 const AppLayout = ({ children, projectId }: AppLayoutProps) => {
   const location = useLocation();
+  const { user, logout } = useAuth();
 
   return (
     <div className="dashboard-layout">
@@ -41,6 +43,14 @@ const AppLayout = ({ children, projectId }: AppLayoutProps) => {
             </>
           )}
         </nav>
+        <div style={{ marginTop: 'auto', padding: '16px' }}>
+          <div style={{ color: '#94a3b8', fontSize: '12px', marginBottom: '8px', overflowWrap: 'anywhere' }}>
+            {user?.email}
+          </div>
+          <button type="button" className="nav-item" onClick={logout} style={{ width: '100%', textAlign: 'left' }}>
+            Sign out
+          </button>
+        </div>
       </aside>
       
       <main className="main-content">

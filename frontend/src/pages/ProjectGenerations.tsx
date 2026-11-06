@@ -13,27 +13,27 @@ const ProjectGenerations: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (projectId) {
-      loadHistory();
-    }
-  }, [projectId]);
-
-  const loadHistory = async () => {
-    setLoading(true);
-    try {
-      const res = await getGenerations(projectId!);
-      setGenerations(res.data);
-    } catch (err: unknown) {
-      if (err && typeof err === 'object' && 'response' in err) {
-        const axErr = err as { response?: { data?: { detail?: string } } };
-        setError(axErr.response?.data?.detail || 'Failed to load generation history');
-      } else {
-        setError('Failed to load generation history');
+    if (!projectId) return;
+    let active = true;
+    const loadHistory = async () => {
+      try {
+        const res = await getGenerations(projectId);
+        if (active) setGenerations(res.data);
+      } catch (err: unknown) {
+        if (!active) return;
+        if (err && typeof err === 'object' && 'response' in err) {
+          const axErr = err as { response?: { data?: { detail?: string } } };
+          setError(axErr.response?.data?.detail || 'Failed to load generation history');
+        } else {
+          setError('Failed to load generation history');
+        }
+      } finally {
+        if (active) setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+    void loadHistory();
+    return () => { active = false; };
+  }, [projectId]);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);

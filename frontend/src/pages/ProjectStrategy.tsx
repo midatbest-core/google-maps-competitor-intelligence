@@ -14,22 +14,21 @@ const ProjectStrategy: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (projectId) {
-      loadData();
-    }
+    if (!projectId) return;
+    let active = true;
+    const loadData = async () => {
+      try {
+        const res = await getAnalyticsSummary(projectId);
+        if (active) setAnalytics(res.data);
+      } catch {
+        if (active) setError('Failed to load content strategy.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void loadData();
+    return () => { active = false; };
   }, [projectId]);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const res = await getAnalyticsSummary(projectId!);
-      setAnalytics(res.data);
-    } catch (err: unknown) {
-      setError('Failed to load content strategy.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const navigateToGenerate = (type: string, value: string) => {
     const params = new URLSearchParams();

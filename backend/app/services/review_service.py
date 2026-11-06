@@ -3,32 +3,56 @@ from sqlalchemy.orm import Session
 from app.models.review import ReviewIntelligence
 from app.models.project import Project
 from app.models.profile import BusinessProfile
-import httpx
 from app.core.config import settings
 from datetime import datetime, timezone
+from app.providers.places import GooglePlacesClient, PlacesReviewResult
 
 logger = logging.getLogger(__name__)
 
 class ReviewService:
-    def __init__(self, db: Session, ai_provider):
+    def __init__(
+        self,
+        db: Session,
+        ai_provider,
+        places_client: GooglePlacesClient | None = None,
+        workspace=None,
+    ):
         self.db = db
         self.ai_provider = ai_provider
+        self.workspace = workspace
+        self.places_client = places_client or GooglePlacesClient(
+            settings.GOOGLE_PLACES_API_KEY,
+            timeout_seconds=settings.GOOGLE_PLACES_TIMEOUT_SECONDS,
+            max_search_pages=settings.GOOGLE_PLACES_MAX_SEARCH_PAGES,
+        )
 
-    async def fetch_google_reviews(self, maps_url: str):
-        if settings.APP_ENV == "test":
-            return [{"text": "Great place!", "rating": 5}, {"text": "A bit slow", "rating": 3}]
+    async def fetch_google_reviews(self, business: BusinessProfile) -> PlacesReviewResult:
+        result = await self.places_client.fetch_reviews(
+            business_name=business.business_name,
+            address=business.address,
+            canonical_source_id=business.canonical_source_id,
+            google_maps_url=business.google_maps_url,
+        )
 
-        api_key = getattr(settings, "GOOGLE_PLACES_API_KEY", None)
-        if not api_key:
-            raise ValueError("Review provider not configured (missing GOOGLE_PLACES_API_KEY)")
-
-        # Mocking for simplicity as per requirements (Google Places API New integration requires Place ID resolution first)
-        # Assuming we just fetch some reviews via mock since Places API requires proper Place ID mapping which takes a lot of code.
-        return [{"text": "Great place!", "rating": 5}, {"text": "A bit slow", "rating": 3}]
+        if business.canonical_source_id != result.place_id:
+            duplicate = self.db.query(BusinessProfile).filter(
+                BusinessProfile.canonical_source_id == result.place_id,
+                BusinessProfile.id != business.id,
+            ).first()
+            if duplicate:
+                raise ValueError(
+                    "Resolved Google Place ID is already assigned to another business"
+                )
+            business.canonical_source_id = result.place_id
+            self.db.commit()
+            self.db.refresh(business)
+        return result
 
     async def analyze_project_reviews(self, project_id: str) -> ReviewIntelligence:
         project = self.db.query(Project).filter(Project.id == project_id).first()
-        if not project:
+        if not project or (
+            self.workspace and project.workspace_id != self.workspace.id
+        ):
             raise ValueError("Project not found")
 
         business_id = project.own_business_id
@@ -36,11 +60,17 @@ class ReviewService:
             raise ValueError("Project has no own business configured")
 
         business = self.db.query(BusinessProfile).filter(BusinessProfile.id == business_id).first()
+        if not business:
+            raise ValueError("Project's own business could not be found")
 
         # 1. Fetch reviews
-        reviews = await self.fetch_google_reviews(business.google_maps_url)
+        review_result = await self.fetch_google_reviews(business)
+        reviews = review_result.reviews
         if not reviews:
-            raise ValueError("No reviews found")
+            raise ValueError(
+                "Google Places returned no review text for this business. "
+                "Place Details currently returns at most five reviews."
+            )
 
         # 2. Analyze with Gemini
         reviews_text = "\n---\n".join([f"Rating: {r['rating']} - {r['text']}" for r in reviews])
@@ -49,7 +79,10 @@ class ReviewService:
         parsed_result, raw_dict = await self.ai_provider.analyze_reviews(prompt, reviews_text)
 
         # 3. Calculate avg rating
-        avg_rating = sum(r['rating'] for r in reviews) / len(reviews)
+        ratings = [r["rating"] for r in reviews if r.get("rating") is not None]
+        avg_rating = review_result.average_rating
+        if avg_rating is None and ratings:
+            avg_rating = sum(ratings) / len(ratings)
 
         # 4. Save to DB
         existing = self.db.query(ReviewIntelligence).filter(
@@ -90,4 +123,10 @@ class ReviewService:
         return intel
 
     def get_review_intelligence(self, project_id: str) -> ReviewIntelligence:
-        return self.db.query(ReviewIntelligence).filter(ReviewIntelligence.project_id == project_id).first()
+        query = self.db.query(ReviewIntelligence).join(
+            Project,
+            Project.id == ReviewIntelligence.project_id,
+        ).filter(ReviewIntelligence.project_id == project_id)
+        if self.workspace:
+            query = query.filter(Project.workspace_id == self.workspace.id)
+        return query.first()

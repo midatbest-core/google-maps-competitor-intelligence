@@ -27,50 +27,52 @@ const ProjectPosts: React.FC = () => {
   const hasAnalysis = searchParams.get('has_analysis') || '';
 
   useEffect(() => {
-    if (projectId) {
-      loadData();
-    }
+    if (!projectId) return;
+    let active = true;
+    const loadMetadata = async () => {
+      const [competitorResult, analyticsResult] = await Promise.allSettled([
+        getProjectCompetitors(projectId),
+        getAnalyticsSummary(projectId),
+      ]);
+      if (!active) return;
+      if (competitorResult.status === 'fulfilled') {
+        setCompetitors(competitorResult.value.data);
+      }
+      if (analyticsResult.status === 'fulfilled') {
+        setAnalytics(analyticsResult.value.data);
+      }
+    };
+    void loadMetadata();
+    return () => { active = false; };
+  }, [projectId]);
+
+  useEffect(() => {
+    if (!projectId) return;
+    let active = true;
+    const loadPosts = async () => {
+      try {
+        const params: Record<string, string | number | boolean | undefined> = { page, page_size: 20 };
+        if (search) params.search = search;
+        if (competitorId) params.competitor_id = competitorId;
+        if (topic) params.topic = topic;
+        if (hasAnalysis === 'true') params.has_analysis = true;
+        else if (hasAnalysis === 'false') params.has_analysis = false;
+
+        const postsRes = await getProjectPosts(projectId, params);
+        if (!active) return;
+        setPosts(postsRes.data.items);
+        setTotal(postsRes.data.total);
+        setPages(postsRes.data.pages);
+        setError(null);
+      } catch {
+        if (active) setError('Failed to load posts repository.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void loadPosts();
+    return () => { active = false; };
   }, [projectId, page, search, competitorId, topic, hasAnalysis]);
-
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      // Load competitors for the filter dropdown
-      if (competitors.length === 0) {
-        const compRes = await getProjectCompetitors(projectId!);
-        setCompetitors(compRes.data);
-      }
-      
-      // Load analytics summary
-      if (!analytics) {
-        try {
-          const anRes = await getAnalyticsSummary(projectId!);
-          setAnalytics(anRes.data);
-        } catch (e) {
-          console.error("Failed to load analytics", e);
-        }
-      }
-
-      // Load posts
-      const params: Record<string, string | number | boolean | undefined> = { page, page_size: 20 };
-      if (search) params.search = search;
-      if (competitorId) params.competitor_id = competitorId;
-      if (topic) params.topic = topic;
-      if (hasAnalysis === 'true') params.has_analysis = true;
-      else if (hasAnalysis === 'false') params.has_analysis = false;
-
-      const postsRes = await getProjectPosts(projectId!, params);
-      setPosts(postsRes.data.items);
-      setTotal(postsRes.data.total);
-      setPages(postsRes.data.pages);
-      
-    } catch (err) {
-      setError('Failed to load posts repository.');
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleFilterChange = (key: string, value: string) => {
     const newParams = new URLSearchParams(searchParams);

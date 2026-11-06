@@ -20,34 +20,29 @@ from typing import Optional
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
 
 def get_current_user(token: Optional[str] = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
-    if token:
-        try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-            user_id = payload.get("sub")
-            if user_id:
-                user = db.query(User).filter_by(id=user_id).first()
-                if user:
-                    return user
-        except JWTError:
-            pass
+    unauthorized = HTTPException(
+        status_code=401,
+        detail="Authentication required",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not token:
+        raise unauthorized
 
-    # Fallback to anonymous user if no valid token
-    user = db.query(User).filter_by(email="anonymous@local").first()
-    if not user:
-        user = User(
-            id="anonymous-user-1",
-            email="anonymous@local",
-            hashed_password="none",
-            full_name="Anonymous User"
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
         )
-        db.add(user)
-        ws = Workspace(id="anonymous-ws-1", name="Local Workspace")
-        db.add(ws)
-        db.flush()
-        member = WorkspaceMember(user_id=user.id, workspace_id=ws.id, role="OWNER")
-        db.add(member)
-        db.commit()
-        db.refresh(user)
+    except JWTError as exc:
+        raise unauthorized from exc
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise unauthorized
+    user = db.query(User).filter_by(id=user_id).first()
+    if not user or not user.is_active:
+        raise unauthorized
     return user
 
 def get_current_workspace(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> Workspace:

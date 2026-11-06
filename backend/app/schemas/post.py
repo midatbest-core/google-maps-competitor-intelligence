@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from datetime import datetime
 from app.schemas.analysis import AIAnalysisResult
@@ -12,15 +12,13 @@ class PostMediaResponse(BaseModel):
     height: Optional[int]
     file_size: Optional[int]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class BusinessInfoResponse(BaseModel):
     id: str
     business_name: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PostResponse(BaseModel):
     id: str
@@ -35,8 +33,7 @@ class PostResponse(BaseModel):
     analysis: Optional[AIAnalysisResult] = None
     media: List[PostMediaResponse] = []
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 class PostListResponse(BaseModel):
     items: List[PostResponse]

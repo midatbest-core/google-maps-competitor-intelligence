@@ -7,6 +7,7 @@ from .scrape import ScrapeRun, ScrapeRunCompetitor, ScrapeObservation, ScrapeSch
 from .analysis import AIAnalysis, GeneratedContent, PostEmbedding
 from .auth import User, Workspace, WorkspaceMember
 from .discovery import DiscoveryRun, DiscoveryCandidate
+from .review import ReviewIntelligence
 
 __all__ = [
     "Base",
@@ -26,6 +27,6 @@ __all__ = [
     "Workspace",
     "WorkspaceMember",
     "DiscoveryRun",
-    "DiscoveryCandidate"
+    "DiscoveryCandidate",
+    "ReviewIntelligence",
 ]
-from .review import ReviewIntelligence

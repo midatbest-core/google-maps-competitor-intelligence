@@ -52,7 +52,9 @@ def test_project_crud_and_isolation():
     assert update_res.json()["name"] == "Updated Project"
     assert update_res.json()["description"] == "desc"
 
-    # 6. empty/whitespace names rejected (if validation exists - pydantic usually handles empty strings if min_length=1 but we didn't add it. We'll skip for now).
+    # 6. empty/whitespace names are rejected.
+    assert client.post("/projects", json={"name": "   "}).status_code == 422
+    assert client.patch(f"/projects/{proj_id}", json={"name": "   "}).status_code == 422
     
     # 7. summary endpoint returns correct project-scoped counts
     summary_res = client.get(f"/projects/{proj_id}/summary")
@@ -83,9 +85,10 @@ def test_project_crud_and_isolation():
 
 def test_unauthenticated_access():
     app.dependency_overrides.clear()
-    res = client.get("/projects")
-    assert res.status_code == 200
-    
-    app.dependency_overrides[get_current_workspace] = override_get_current_workspace
-    app.dependency_overrides[get_current_user] = override_get_current_user
+    try:
+        res = client.get("/projects")
+        assert res.status_code == 401
+    finally:
+        app.dependency_overrides[get_current_workspace] = override_get_current_workspace
+        app.dependency_overrides[get_current_user] = override_get_current_user
 
