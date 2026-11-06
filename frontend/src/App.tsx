@@ -1,25 +1,38 @@
 
-import { type ReactNode } from 'react';
+import { lazy, Suspense, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { useAuth } from './context/auth';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import CreateProject from './pages/CreateProject';
-import ProjectDashboard from './pages/ProjectDashboard';
-import ProjectCompetitors from './pages/ProjectCompetitors';
-import ProjectDiscovery from './pages/ProjectDiscovery';
-import ProjectScraping from './pages/ProjectScraping';
-import ProjectPosts from './pages/ProjectPosts';
-import ProjectStrategy from './pages/ProjectStrategy';
-import ProjectGenerate from './pages/ProjectGenerate';
-import ProjectGenerations from './pages/ProjectGenerations';
+import ToastHost from './components/ToastHost';
+
+const Login = lazy(() => import('./pages/Login'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const CreateProject = lazy(() => import('./pages/CreateProject'));
+const ProjectDashboard = lazy(() => import('./pages/ProjectDashboard'));
+const ProjectCompetitors = lazy(() => import('./pages/ProjectCompetitors'));
+const ProjectDiscovery = lazy(() => import('./pages/ProjectDiscovery'));
+const ProjectScraping = lazy(() => import('./pages/ProjectScraping'));
+const ProjectPosts = lazy(() => import('./pages/ProjectPosts'));
+const ProjectStrategy = lazy(() => import('./pages/ProjectStrategy'));
+const ProjectGenerate = lazy(() => import('./pages/ProjectGenerate'));
+const ProjectGenerations = lazy(() => import('./pages/ProjectGenerations'));
+
+const PageSkeleton = () => (
+  <div className="page-skeleton" aria-label="Loading page">
+    <div className="skeleton skeleton-heading" />
+    <div className="skeleton-grid">
+      <div className="skeleton skeleton-card" />
+      <div className="skeleton skeleton-card" />
+      <div className="skeleton skeleton-card" />
+    </div>
+  </div>
+);
 
 const ProtectedRoute = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="auth-loading">Loading…</div>;
+    return <PageSkeleton />;
   }
 
   return user ? children : <Navigate to="/login" replace />;
@@ -29,7 +42,7 @@ const PublicOnlyRoute = ({ children }: { children: ReactNode }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="auth-loading">Loading…</div>;
+    return <PageSkeleton />;
   }
 
   return user ? <Navigate to="/dashboard" replace /> : children;
@@ -39,6 +52,8 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <ToastHost />
+        <Suspense fallback={<PageSkeleton />}>
         <Routes>
           <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -54,6 +69,7 @@ function App() {
           <Route path="/projects/:projectId/*" element={<ProtectedRoute><ProjectDashboard /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
     </AuthProvider>
   );

@@ -28,6 +28,7 @@ class ScrapeRunResponse(BaseModel):
     competitors_attempted: int
     competitors_succeeded: int
     competitors_failed: int
+    error_logs: Optional[List[str]] = None
     competitor_runs: Optional[List[ScrapeRunCompetitorResponse]] = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -74,6 +74,13 @@
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
+.field-hint {
+  display: block;
+  margin-top: 6px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
 .submit-btn {
   width: 100%;
   padding: 14px;
@@ -91,6 +98,12 @@
 .submit-btn:hover {
   background: #2563eb;
   transform: translateY(-1px);
+}
+
+.submit-btn:disabled {
+  opacity: 0.65;
+  cursor: wait;
+  transform: none;
 }
 
 .toggle-text {

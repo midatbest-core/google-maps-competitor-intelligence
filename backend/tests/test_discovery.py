@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.models.discovery import DiscoveryRun, DiscoveryCandidate
@@ -7,6 +8,7 @@ from app.models.profile import BusinessProfile
 from app.services.discovery_service import DiscoveryService, haversine_distance
 from app.providers.discovery.fake import FakeDiscoveryProvider
 from app.schemas.discovery import DiscoveryRunCreate, DirectCompetitorCreate, DiscoveryCandidateSchema
+from app.providers.discovery.google_maps import GoogleMapsDiscoveryProvider
 
 @pytest.fixture
 def fake_provider():
@@ -175,4 +177,64 @@ def test_resume_paused_manual_intervention(db: Session, discovery_service):
 
     resumed = discovery_service.resume_discovery(p.id, run.id)
     assert resumed.status == "QUEUED"
+
+
+def test_queued_discovery_fails_after_one_minute(db: Session, discovery_service):
+    project = Project(name="Timeout Project")
+    db.add(project)
+    db.commit()
+    run = discovery_service.create_discovery_run(
+        project.id,
+        DiscoveryRunCreate(query="cafes"),
+    )
+    run.created_at = datetime.now(timezone.utc) - timedelta(seconds=61)
+    db.commit()
+
+    runs = discovery_service.get_runs_for_project(project.id)
+
+    assert runs[0].status == "FAILED"
+    assert runs[0].completed_at is not None
+    assert "60 seconds" in runs[0].error_message
+
+
+def test_discovery_enqueue_failure_is_persisted(db: Session, discovery_service):
+    project = Project(name="Queue Failure Project")
+    db.add(project)
+    db.commit()
+    run = discovery_service.create_discovery_run(
+        project.id,
+        DiscoveryRunCreate(query="cafes"),
+    )
+
+    discovery_service.mark_enqueue_failed(run.id)
+    db.refresh(run)
+
+    assert run.status == "FAILED"
+    assert run.error_message == "Discovery queue is unavailable"
+
+
+@pytest.mark.asyncio
+async def test_google_places_discovery_provider_maps_candidates():
+    class StubPlacesClient:
+        async def search_businesses(self, **kwargs):
+            assert kwargs["query"] == "coffee"
+            return [{
+                "id": "ChIJCompetitor123",
+                "displayName": {"text": "Competitor Cafe"},
+                "formattedAddress": "1 Main Street",
+                "location": {"latitude": 1.2, "longitude": 3.4},
+                "primaryTypeDisplayName": {"text": "Coffee shop"},
+                "rating": 4.4,
+                "userRatingCount": 120,
+                "googleMapsUri": "https://maps.google.com/example",
+                "websiteUri": "https://example.test",
+            }]
+
+    provider = GoogleMapsDiscoveryProvider(StubPlacesClient())
+    candidates = await provider.discover(query="coffee", location="Test City")
+
+    assert len(candidates) == 1
+    assert candidates[0].source_identifier == "ChIJCompetitor123"
+    assert candidates[0].business_name == "Competitor Cafe"
+    assert candidates[0].review_count == 120
 

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
-import { getScrapeRuns, startScrape, getScrapeRun, resumeScrapeRun, deleteScrapeRun } from '../api';
+import { getApiErrorMessage, getScrapeRuns, startScrape, getScrapeRun, resumeScrapeRun, deleteScrapeRun } from '../api';
 import type { ScrapeRun, ScrapeRunCompetitor } from '../api';
 import './ProjectScraping.css';
 
@@ -62,9 +62,8 @@ const ProjectScraping: React.FC = () => {
       } else if (!activeRunId && sortedRuns.length > 0) {
         setActiveRunId(sortedRuns[0].id);
       }
-    } catch (err: any) {
-      console.error(err);
-      setError('Failed to load scrape runs');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Failed to load scrape runs'));
     } finally {
       setLoading(false);
     }
@@ -84,8 +83,8 @@ const ProjectScraping: React.FC = () => {
         // We can slow down polling or stop, let's stop for now to prevent spam
         stopPolling();
       }
-    } catch (err) {
-      console.error('Failed to load run details', err);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Failed to load run details'));
     }
   }, [activeRunId, stopPolling]);
 
@@ -130,13 +129,8 @@ const ProjectScraping: React.FC = () => {
       const res = await startScrape(projectId);
       await fetchRuns();
       setActiveRunId(res.data.id);
-    } catch (err: any) {
-      console.error(err);
-      if (err.response?.data?.detail) {
-        setError(`Cannot start scrape: ${err.response.data.detail}`);
-      } else {
-        setError('Failed to start scrape');
-      }
+    } catch (err: unknown) {
+      setError(`Cannot start scrape: ${getApiErrorMessage(err, 'Failed to start scrape')}`);
       await fetchRuns(); // Refresh in case the backend failed stale runs
     } finally {
       setStarting(false);
@@ -160,9 +154,8 @@ const ProjectScraping: React.FC = () => {
         setActiveRunDetails(null);
       }
       await fetchRuns();
-    } catch (err: any) {
-      console.error(err);
-      setError(err.response?.data?.detail || 'Failed to delete run');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Failed to delete run'));
     }
   };
 
@@ -175,9 +168,8 @@ const ProjectScraping: React.FC = () => {
       await fetchActiveRunDetails();
       await fetchRuns();
       startPolling();
-    } catch (err: any) {
-      console.error(err);
-      setError(err.response?.data?.detail || 'Failed to resume run');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Failed to resume run'));
     } finally {
       setResuming(false);
     }
@@ -200,7 +192,11 @@ const ProjectScraping: React.FC = () => {
     return (
       <AppLayout projectId={projectId}>
         <div className="scraping-page loading-state">
-          <p>Loading scrape runs...</p>
+          <div className="skeleton skeleton-heading" />
+          <div className="skeleton-grid">
+            <div className="skeleton skeleton-card" />
+            <div className="skeleton skeleton-card" />
+          </div>
         </div>
       </AppLayout>
     );
@@ -280,6 +276,12 @@ const ProjectScraping: React.FC = () => {
                     <button className="btn-warning" onClick={handleResumeRun} disabled={resuming}>
                       {resuming ? 'Resuming...' : 'Resume Run'}
                     </button>
+                  </div>
+                )}
+
+                {activeRunDetails.error_logs && activeRunDetails.error_logs.length > 0 && (
+                  <div className="error-message" role="alert">
+                    {activeRunDetails.error_logs.join(' ')}
                   </div>
                 )}
 

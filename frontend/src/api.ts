@@ -1,7 +1,29 @@
 import axios from 'axios';
 
+export const getApiErrorMessage = (error: unknown, fallback = 'Something went wrong') => {
+  if (!error || typeof error !== 'object' || !('response' in error)) return fallback;
+  const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (!item || typeof item !== 'object') return String(item);
+        const issue = item as { loc?: Array<string | number>; msg?: string };
+        const field = issue.loc?.filter((part) => part !== 'body').join('.');
+        return `${field ? `${field}: ` : ''}${issue.msg || 'Invalid value'}`;
+      })
+      .join(' ');
+  }
+  return fallback;
+};
+
+export const notifyError = (message: string) => {
+  window.dispatchEvent(new CustomEvent('app:error', { detail: message }));
+};
+
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api', // Use env var if available, else fallback to proxy
+  timeout: 30000,
 });
 
 api.interceptors.request.use((config) => {
@@ -18,6 +40,8 @@ api.interceptors.response.use(
     if (error.response?.status === 401 && window.location.pathname !== '/login') {
       localStorage.removeItem('token');
       window.location.assign('/login');
+    } else if (error.response?.status !== 401) {
+      notifyError(getApiErrorMessage(error, 'The request could not be completed'));
     }
     return Promise.reject(error);
   }
@@ -127,6 +151,7 @@ export interface ScrapeRun {
   competitors_attempted: number;
   competitors_succeeded: number;
   competitors_failed: number;
+  error_logs?: string[];
   competitor_runs?: ScrapeRunCompetitor[];
 }
 
@@ -320,3 +345,7 @@ export interface ReviewIntelligence {
 
 export const getReviewIntelligence = (projectId: string) => api.get<ReviewIntelligence>(`/projects/${projectId}/review-intelligence`);
 export const analyzeReviewIntelligence = (projectId: string) => api.post<ReviewIntelligence>(`/projects/${projectId}/review-intelligence`);
+export const getBusinessReviewIntelligence = (projectId: string, businessId: string) =>
+  api.get<ReviewIntelligence>(`/projects/${projectId}/businesses/${businessId}/review-intelligence`);
+export const analyzeBusinessReviewIntelligence = (projectId: string, businessId: string) =>
+  api.post<ReviewIntelligence>(`/projects/${projectId}/businesses/${businessId}/review-intelligence`);

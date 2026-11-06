@@ -29,6 +29,16 @@
   font-size: 14px;
 }
 
+.run-error {
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  background: var(--error-bg);
+  color: #fca5a5;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .run-header {
   display: flex;
   justify-content: space-between;

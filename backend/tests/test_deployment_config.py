@@ -81,6 +81,8 @@ def test_render_blueprint_defines_web_worker_and_environment_parity():
         "GOOGLE_PLACES_API_KEY",
         "GOOGLE_PLACES_TIMEOUT_SECONDS",
         "GOOGLE_PLACES_MAX_SEARCH_PAGES",
+        "DISCOVERY_PROVIDER",
+        "QUEUE_STALE_TIMEOUT_SECONDS",
         "CORS_ORIGINS",
     ):
         assert f"key: {variable}" in blueprint

@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from app.main import app
 from app.models.auth import Workspace, User
@@ -149,3 +150,19 @@ def test_scrape_queue_failure_marks_run_failed(monkeypatch):
         assert run.status == "FAILED"
         assert run.end_time is not None
         assert run.error_logs == ["Scrape queue is unavailable"]
+
+
+def test_queued_scrape_is_marked_failed_after_one_minute():
+    project_id = client.post("/projects", json={"name": "Stale Queue"}).json()["id"]
+    response = client.post(f"/projects/{project_id}/scrape")
+    assert response.status_code == 202
+
+    with SessionLocal() as db:
+        run = db.query(ScrapeRun).filter_by(project_id=project_id).one()
+        run.created_at = datetime.now(timezone.utc) - timedelta(seconds=61)
+        db.commit()
+
+    runs = client.get(f"/projects/{project_id}/scrape-runs")
+    assert runs.status_code == 200
+    assert runs.json()[0]["status"] == "FAILED"
+    assert "60 seconds" in runs.json()[0]["error_logs"][0]

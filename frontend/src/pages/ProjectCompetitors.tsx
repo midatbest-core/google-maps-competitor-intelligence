@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
+import ReviewIntelligence from '../components/ReviewIntelligence';
 import { getProjectCompetitors, addDirectCompetitor, getProjectSummary, updateProject } from '../api';
 import type { Competitor } from '../api';
 import './ProjectCompetitors.css';
@@ -12,6 +13,7 @@ const ProjectCompetitors = () => {
   const [ownBusinessId, setOwnBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [expandedBusinessId, setExpandedBusinessId] = useState<string | null>(null);
   
   // Direct Add Form State
   const [showAddForm, setShowAddForm] = useState(false);
@@ -149,7 +151,11 @@ const ProjectCompetitors = () => {
           </div>
         )}
 
-        {loading && <div className="state-message">Loading competitors...</div>}
+        {loading && (
+          <div className="competitors-list" aria-label="Loading competitors">
+            {[0, 1, 2].map((item) => <div key={item} className="skeleton skeleton-card" />)}
+          </div>
+        )}
         {error && <div className="state-message error">{error}</div>}
 
         {!loading && !error && competitors.length === 0 && (
@@ -165,34 +171,55 @@ const ProjectCompetitors = () => {
         {!loading && !error && competitors.length > 0 && (
           <div className="competitors-list">
             {competitors.map(c => (
-              <div key={c.id} className="competitor-card">
-                <div className="competitor-info">
-                  <h3>{c.business?.business_name || 'Unknown Business'}</h3>
-                  {c.business?.category && <span className="category-badge">{c.business.category}</span>}
-                  {c.business?.address && <p className="address">{c.business.address}</p>}
-                  {c.business?.google_maps_url && (
-                    <a href={c.business.google_maps_url} target="_blank" rel="noreferrer" className="maps-link">
-                      View on Maps &rarr;
-                    </a>
-                  )}
-                </div>
-                <div className="competitor-status" style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
-                  <div>
-                    <span className={`status-dot ${c.is_active ? 'active' : 'inactive'}`}></span>
-                    {c.is_active ? 'Active' : 'Inactive'}
-                  </div>
-                  {c.business_id === ownBusinessId ? (
-                    <span className="badge" style={{ backgroundColor: '#10b981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>Your Business</span>
-                  ) : (
-                    <button 
-                      className="secondary-btn" 
-                      style={{ padding: '4px 8px', fontSize: '0.8rem' }}
-                      onClick={() => handleSetOwnBusiness(c.business_id)}
+              <div key={c.id} className={`competitor-card ${expandedBusinessId === c.business_id ? 'expanded' : ''}`}>
+                <div className="competitor-summary">
+                  <div className="competitor-info">
+                    <button
+                      type="button"
+                      className="competitor-name-button"
+                      aria-expanded={expandedBusinessId === c.business_id}
+                      onClick={() => setExpandedBusinessId(
+                        expandedBusinessId === c.business_id ? null : c.business_id
+                      )}
                     >
-                      Set as My Business
+                      {c.business?.business_name || 'Unknown Business'}
+                      <span aria-hidden="true">{expandedBusinessId === c.business_id ? '−' : '+'}</span>
                     </button>
-                  )}
+                    {c.business?.category && <span className="category-badge">{c.business.category}</span>}
+                    {c.business?.address && <p className="address">{c.business.address}</p>}
+                    {c.business?.google_maps_url && (
+                      <a href={c.business.google_maps_url} target="_blank" rel="noreferrer" className="maps-link">
+                        View on Maps &rarr;
+                      </a>
+                    )}
+                  </div>
+                  <div className="competitor-status" style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+                    <div>
+                      <span className={`status-dot ${c.is_active ? 'active' : 'inactive'}`}></span>
+                      {c.is_active ? 'Active' : 'Inactive'}
+                    </div>
+                    {c.business_id === ownBusinessId ? (
+                      <span className="badge" style={{ backgroundColor: '#10b981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>Your Business</span>
+                    ) : (
+                      <button
+                        className="secondary-btn"
+                        style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                        onClick={() => handleSetOwnBusiness(c.business_id)}
+                      >
+                        Set as My Business
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {expandedBusinessId === c.business_id && projectId && (
+                  <div className="competitor-review-panel">
+                    <ReviewIntelligence
+                      projectId={projectId}
+                      businessId={c.business_id}
+                      businessName={c.business?.business_name}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>

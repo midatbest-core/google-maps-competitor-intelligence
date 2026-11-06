@@ -27,6 +27,10 @@ services:
         value: "20"
       - key: GOOGLE_PLACES_MAX_SEARCH_PAGES
         value: "3"
+      - key: DISCOVERY_PROVIDER
+        value: google_places
+      - key: QUEUE_STALE_TIMEOUT_SECONDS
+        value: "60"
       - key: CORS_ORIGINS
         sync: false
       - key: SECRET_KEY

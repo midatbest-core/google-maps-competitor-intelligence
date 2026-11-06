@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     SCRAPER_COOLDOWN: int = 60
     SCRAPER_HEADLESS: bool = True
     SCRAPER_PROFILE_DIR: str = "./.scraper_profiles"
+    QUEUE_STALE_TIMEOUT_SECONDS: int = 60
 
     # AI Config
     AI_PROVIDER: str = "fake"
@@ -31,6 +32,7 @@ class Settings(BaseSettings):
     GOOGLE_PLACES_API_KEY: str | None = None
     GOOGLE_PLACES_TIMEOUT_SECONDS: float = 20.0
     GOOGLE_PLACES_MAX_SEARCH_PAGES: int = 3
+    DISCOVERY_PROVIDER: str = "google_places"
     OPENAI_API_KEY: str = ""
     EMBEDDING_PROVIDER: str = "fake"
 

@@ -4,10 +4,27 @@ from app.services.discovery_service import DiscoveryService
 from app.schemas.discovery import DiscoveryRunCreate, DiscoveryRunResponse, DiscoveryCandidateResponse, DirectCompetitorCreate
 from app.schemas.competitor import CompetitorResponse
 from app.core.arq import get_redis_pool
-from app.api.dependencies import get_discovery_service
 from typing import List
 
 discovery_router = APIRouter(tags=["discovery"])
+
+async def _enqueue_discovery_run(run, service: DiscoveryService) -> None:
+    pool = None
+    try:
+        pool = await get_redis_pool()
+        await pool.enqueue_job("discovery_job", run.id)
+    except Exception as exc:
+        service.mark_enqueue_failed(run.id)
+        raise HTTPException(
+            status_code=503,
+            detail="Discovery queue is unavailable",
+        ) from exc
+    finally:
+        if pool is not None:
+            try:
+                await pool.close()
+            except Exception:
+                pass
 
 @discovery_router.post("/projects/{project_id}/discovery", response_model=DiscoveryRunResponse, status_code=status.HTTP_201_CREATED)
 async def start_discovery(project_id: str, payload: DiscoveryRunCreate, service: DiscoveryService = Depends(get_discovery_service)):
@@ -16,12 +33,7 @@ async def start_discovery(project_id: str, payload: DiscoveryRunCreate, service:
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
         
-    try:
-        pool = await get_redis_pool()
-        await pool.enqueue_job("discovery_job", run.id)
-        await pool.close()
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to enqueue discovery job")
+    await _enqueue_discovery_run(run, service)
         
     return run
 
@@ -75,11 +87,6 @@ async def resume_discovery(project_id: str, run_id: str, service: DiscoveryServi
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
         
-    try:
-        pool = await get_redis_pool()
-        await pool.enqueue_job("discovery_job", run.id)
-        await pool.close()
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to enqueue discovery job")
+    await _enqueue_discovery_run(run, service)
         
     return run

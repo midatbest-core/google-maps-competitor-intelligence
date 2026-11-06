@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from typing import Optional, List, Tuple
 from datetime import datetime, timezone
 import math
+from app.core.config import settings
 
 from app.models.discovery import DiscoveryRun, DiscoveryCandidate
 from app.models.project import Project
@@ -66,16 +67,54 @@ class DiscoveryService:
         self.db.add(run)
         self.db.commit()
         return run
+
+    @staticmethod
+    def _as_utc(value: datetime) -> datetime:
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+    def _reconcile_stale_queued_run(self, run: DiscoveryRun, now: datetime | None = None) -> bool:
+        if run.status != "QUEUED" or not run.created_at:
+            return False
+        now = now or datetime.now(timezone.utc)
+        age = (now - self._as_utc(run.created_at)).total_seconds()
+        if age <= settings.QUEUE_STALE_TIMEOUT_SECONDS:
+            return False
+        run.status = "FAILED"
+        run.completed_at = now
+        run.error_message = (
+            f"Worker did not start this discovery within "
+            f"{settings.QUEUE_STALE_TIMEOUT_SECONDS} seconds. "
+            "Check the ARQ worker and Redis connection."
+        )
+        return True
+
+    def mark_enqueue_failed(self, run_id: str) -> None:
+        run = self.db.query(DiscoveryRun).filter_by(id=run_id).first()
+        if not run:
+            return
+        run.status = "FAILED"
+        run.completed_at = datetime.now(timezone.utc)
+        run.error_message = "Discovery queue is unavailable"
+        self.db.commit()
         
     def get_run(self, run_id: str) -> Optional[DiscoveryRun]:
         run = self.db.query(DiscoveryRun).filter_by(id=run_id).first()
         if run:
             self._verify_project(run.project_id)
+            if self._reconcile_stale_queued_run(run):
+                self.db.commit()
+                self.db.refresh(run)
         return run
 
     def get_runs_for_project(self, project_id: str) -> List[DiscoveryRun]:
         self._verify_project(project_id)
-        return self.db.query(DiscoveryRun).filter_by(project_id=project_id).order_by(DiscoveryRun.created_at.desc()).all()
+        runs = self.db.query(DiscoveryRun).filter_by(project_id=project_id).order_by(DiscoveryRun.created_at.desc()).all()
+        changed = False
+        for run in runs:
+            changed = self._reconcile_stale_queued_run(run) or changed
+        if changed:
+            self.db.commit()
+        return runs
 
     def get_candidates(self, project_id: str, skip: int = 0, limit: int = 50) -> List[DiscoveryCandidate]:
         self._verify_project(project_id)

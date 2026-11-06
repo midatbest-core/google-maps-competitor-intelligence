@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.scrape import ScrapeRun, ScrapeRunCompetitor, ScrapeObservation
 from app.models.post import Post
+from app.models.discovery import DiscoveryRun
 from app.scraper.google_maps.adapter import GoogleMapsAdapter
 from app.core.arq import redis_settings_from_url
 from app.services.ingestion_service import IngestionService
@@ -176,6 +177,15 @@ async def discovery_job(ctx, run_id: str):
     except Exception as e:
         logger.exception(f"Error in discovery job for run {run_id}")
         db.rollback()
+        try:
+            failed_run = db.query(DiscoveryRun).filter_by(id=run_id).first()
+            if failed_run:
+                failed_run.status = "FAILED"
+                failed_run.completed_at = datetime.now(timezone.utc)
+                failed_run.error_message = "Discovery worker failed before completion"
+                db.commit()
+        except Exception:
+            logger.exception("Failed to persist discovery worker failure")
     finally:
         db.close()
 

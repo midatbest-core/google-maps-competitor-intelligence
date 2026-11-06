@@ -2,6 +2,7 @@ import { useCallback, useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { getDiscoveryRuns, startDiscovery, getDiscoveryCandidates, selectDiscoveryCandidate, rejectDiscoveryCandidate } from '../api';
+import { getApiErrorMessage } from '../api';
 import type { DiscoveryRun, DiscoveryCandidate } from '../api';
 import './ProjectDiscovery.css';
 
@@ -13,7 +14,7 @@ const ProjectDiscovery = () => {
   const [candidates, setCandidates] = useState<DiscoveryCandidate[]>([]);
   
   const [loadingRuns, setLoadingRuns] = useState(true);
-  const [loadingCandidates, setLoadingCandidates] = useState(false);
+  const [loadingCandidates, setLoadingCandidates] = useState(true);
   // Removed unused error state
   
   // Discovery Form State
@@ -55,24 +56,34 @@ const ProjectDiscovery = () => {
     void loadCandidates();
   }, [loadRuns, loadCandidates]);
 
+  useEffect(() => {
+    if (!runs.some((run) => ['QUEUED', 'RUNNING'].includes(run.status))) return;
+    const timer = window.setInterval(() => {
+      void loadRuns();
+      void loadCandidates();
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [runs, loadRuns, loadCandidates]);
+
   const handleStartDiscovery = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       setFormSubmitting(true);
       setFormError('');
-      await startDiscovery(projectId!, {
+      const response = await startDiscovery(projectId!, {
         query: formQuery.trim() || undefined,
         location: formLocation.trim() || undefined,
         category: formCategory.trim() || undefined,
         radius: 50, // default
       });
+      setRuns((current) => [response.data, ...current.filter((run) => run.id !== response.data.id)]);
       setShowDiscoveryForm(false);
       setFormQuery('');
       setFormLocation('');
       setFormCategory('');
       await loadRuns();
-    } catch (err: any) {
-      setFormError(err.response?.data?.detail || 'Failed to start discovery');
+    } catch (err: unknown) {
+      setFormError(getApiErrorMessage(err, 'Failed to start discovery'));
     } finally {
       setFormSubmitting(false);
     }
@@ -182,7 +193,11 @@ const ProjectDiscovery = () => {
               <h2 className="section-title">Runs History</h2>
               <button className="icon-btn" onClick={loadRuns} title="Refresh Runs">&#x21bb;</button>
             </div>
-            {loadingRuns && <div className="state-message">Loading runs...</div>}
+            {loadingRuns && (
+              <div className="runs-list" aria-label="Loading discovery runs">
+                {[0, 1].map((item) => <div key={item} className="skeleton skeleton-card" />)}
+              </div>
+            )}
             {!loadingRuns && runs.length === 0 && (
               <div className="empty-state-small">No discovery runs yet.</div>
             )}
@@ -201,6 +216,7 @@ const ProjectDiscovery = () => {
                     <span>{run.total_candidates} Found</span>
                     <span>{run.duplicates_skipped} Skipped</span>
                   </div>
+                  {run.error_message && <div className="run-error" role="alert">{run.error_message}</div>}
                 </div>
               ))}
             </div>
@@ -212,7 +228,11 @@ const ProjectDiscovery = () => {
               <button className="icon-btn" onClick={loadCandidates} title="Refresh Candidates">&#x21bb;</button>
             </div>
             
-            {loadingCandidates && <div className="state-message">Loading candidates...</div>}
+            {loadingCandidates && (
+              <div className="candidates-list" aria-label="Loading discovery candidates">
+                {[0, 1, 2].map((item) => <div key={item} className="skeleton skeleton-card" />)}
+              </div>
+            )}
             {!loadingCandidates && candidates.length === 0 && (
               <div className="empty-state">No discovery candidates found.</div>
             )}

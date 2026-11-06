@@ -165,6 +165,37 @@ async def generate_review_intelligence(project_id: str, service: ReviewService =
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@project_router.get("/{project_id}/businesses/{business_id}/review-intelligence")
+def get_business_review_intelligence(
+    project_id: str,
+    business_id: str,
+    service: ReviewService = Depends(get_review_service),
+):
+    try:
+        intel = service.get_review_intelligence(project_id, business_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not intel:
+        raise HTTPException(status_code=404, detail="Review intelligence not found")
+    return intel
+
+@project_router.post("/{project_id}/businesses/{business_id}/review-intelligence")
+async def generate_business_review_intelligence(
+    project_id: str,
+    business_id: str,
+    service: ReviewService = Depends(get_review_service),
+):
+    try:
+        return await service.analyze_project_reviews(project_id, business_id)
+    except GeminiConfigurationError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except (GeminiAPIError, GeminiResponseError) as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except GooglePlacesAPIError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 # Schedule endpoints removed
 
 @project_router.get("/{project_id}/posts", response_model=PostListResponse)

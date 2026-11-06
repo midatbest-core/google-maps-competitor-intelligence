@@ -4,6 +4,7 @@ from app.repositories.project_repo import ProjectRepository
 from app.models.scrape import ScrapeRun, ScrapeRunCompetitor
 from datetime import datetime, timezone
 from app.models.auth import Workspace
+from app.core.config import settings
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,24 @@ class ScrapeService:
             return
         self._verify_project(run.project_id)
 
+    @staticmethod
+    def _as_utc(value: datetime) -> datetime:
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+    def _reconcile_stale_queued_run(self, run: ScrapeRun, now: datetime | None = None) -> bool:
+        if run.status != "QUEUED" or not run.created_at:
+            return False
+        now = now or datetime.now(timezone.utc)
+        age = (now - self._as_utc(run.created_at)).total_seconds()
+        if age <= settings.QUEUE_STALE_TIMEOUT_SECONDS:
+            return False
+        run.status = "FAILED"
+        run.end_time = now
+        run.error_logs = [
+            "Worker did not start this scrape within 60 seconds. Check the ARQ worker and Redis connection."
+        ]
+        return True
+
     def create_scrape_run(self, project_id: str) -> ScrapeRun:
         self._verify_project(project_id)
         logger.info(f"Creating scrape run for project {project_id}")
@@ -45,10 +64,8 @@ class ScrapeService:
             r_created_at = r.created_at.replace(tzinfo=timezone.utc) if r.created_at.tzinfo is None else r.created_at
             time_since_creation = (now - r_created_at).total_seconds()
 
-            if r.status == "QUEUED" and time_since_creation > 300: # 5 mins stale
-                r.status = "FAILED"
-                r.error_logs = ["Marked as FAILED due to being stuck in QUEUED"]
-                r.end_time = now
+            if r.status == "QUEUED" and time_since_creation > settings.QUEUE_STALE_TIMEOUT_SECONDS:
+                self._reconcile_stale_queued_run(r, now)
             elif r.status in ["RUNNING", "RETRYING"] and r.start_time:
                 r_start_time = r.start_time.replace(tzinfo=timezone.utc) if r.start_time.tzinfo is None else r.start_time
                 if (now - r_start_time).total_seconds() > 3600: # 1 hour stale
@@ -86,11 +103,20 @@ class ScrapeService:
     def get_run(self, run_id: str) -> ScrapeRun | None:
         run = self.scrape_run_repo.get(run_id)
         self._verify_run(run)
+        if run and self._reconcile_stale_queued_run(run):
+            self.db.commit()
+            self.db.refresh(run)
         return run
 
     def get_runs_for_project(self, project_id: str) -> list[ScrapeRun]:
         self._verify_project(project_id)
-        return self.scrape_run_repo.get_runs_for_project(project_id)
+        runs = self.scrape_run_repo.get_runs_for_project(project_id)
+        changed = False
+        for run in runs:
+            changed = self._reconcile_stale_queued_run(run) or changed
+        if changed:
+            self.db.commit()
+        return runs
 
     def delete_run(self, project_id: str, run_id: str) -> None:
         self._verify_project(project_id)
