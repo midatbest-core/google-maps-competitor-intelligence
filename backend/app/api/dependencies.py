@@ -5,10 +5,12 @@ from app.services.project_service import ProjectService
 from app.services.scrape_service import ScrapeService
 from app.services.analytics_service import AnalyticsService
 from app.services.analysis_service import AnalysisService
+from app.services.combined_intelligence_service import CombinedIntelligenceService
 from app.services.discovery_service import DiscoveryService
 from app.providers.ai.factory import get_ai_provider
 from app.providers.embedding.factory import get_embedding_provider
 from app.services.generation_service import GenerationService
+from app.services.post_service import PostService
 from fastapi import HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
@@ -73,7 +75,8 @@ def get_discovery_service(db: Session = Depends(get_db), ws: Workspace = Depends
 def get_generation_service(db: Session = Depends(get_db), ws: Workspace = Depends(get_current_workspace)) -> GenerationService:
     return GenerationService(db, get_ai_provider(), get_embedding_provider(), None, ws)
 
-from app.services.post_service import PostService
-
 def get_post_service(db: Session = Depends(get_db), ws: Workspace = Depends(get_current_workspace)) -> PostService:
     return PostService(db, ws)
+
+def get_combined_intelligence_service(db: Session = Depends(get_db), ws: Workspace = Depends(get_current_workspace)) -> CombinedIntelligenceService:
+    return CombinedIntelligenceService(db, get_ai_provider(), ws)

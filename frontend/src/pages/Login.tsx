@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useAuth } from '../context/auth';
-import api, { getApiErrorMessage, notifyError } from '../api';
+import { useAuth } from '../context/AuthContext';
+import api from '../api';
 import './Login.css';
 
 const Login = () => {
@@ -9,37 +9,26 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
   const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    if (password.length < 8) {
-      const message = 'Password must be at least 8 characters.';
-      setError(message);
-      notifyError(message);
-      return;
-    }
-
     try {
-      setSubmitting(true);
       if (isLogin) {
         const response = await api.post('/auth/login', { email, password });
-        await login(response.data.access_token);
+        login(response.data.access_token);
         window.location.href = '/dashboard';
       } else {
         await api.post('/auth/register', { email, password, full_name: fullName });
         // Automatically login after register
         const loginRes = await api.post('/auth/login', { email, password });
-        await login(loginRes.data.access_token);
+        login(loginRes.data.access_token);
         window.location.href = '/dashboard';
       }
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Unable to authenticate'));
-    } finally {
-      setSubmitting(false);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'An error occurred');
     }
   };
 
@@ -82,14 +71,12 @@ const Login = () => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              minLength={8}
               required
             />
-            <small className="field-hint">Use at least 8 characters.</small>
           </div>
           
-          <button type="submit" className="submit-btn" disabled={submitting}>
-            {submitting ? 'Please wait…' : (isLogin ? 'Sign In' : 'Register')}
+          <button type="submit" className="submit-btn">
+            {isLogin ? 'Sign In' : 'Register'}
           </button>
         </form>
         

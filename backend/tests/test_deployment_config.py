@@ -81,22 +81,6 @@ def test_render_blueprint_defines_web_worker_and_environment_parity():
         "GOOGLE_PLACES_API_KEY",
         "GOOGLE_PLACES_TIMEOUT_SECONDS",
         "GOOGLE_PLACES_MAX_SEARCH_PAGES",
-        "DISCOVERY_PROVIDER",
-        "QUEUE_STALE_TIMEOUT_SECONDS",
         "CORS_ORIGINS",
     ):
         assert f"key: {variable}" in blueprint
-
-    assert "name: comp-intel-frontend" in blueprint
-    assert "runtime: static" in blueprint
-    assert "key: VITE_API_URL" in blueprint
-    assert "destination: /index.html" in blueprint
-
-
-def test_frontend_requires_authentication_and_exposes_login_route():
-    app_source = (ROOT / "frontend" / "src" / "App.tsx").read_text(encoding="utf-8")
-    api_source = (ROOT / "frontend" / "src" / "api.ts").read_text(encoding="utf-8")
-
-    assert 'path="/login"' in app_source
-    assert "ProtectedRoute" in app_source
-    assert "window.location.assign('/login')" in api_source

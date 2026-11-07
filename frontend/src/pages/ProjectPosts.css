@@ -389,3 +389,43 @@
   color: #9ba1a6;
   font-size: 0.9rem;
 }
+
+/* Sentiment badges and reviews responsiveness */
+.sentiment-badge.sentiment-positive {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.sentiment-badge.sentiment-negative {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.sentiment-badge.sentiment-neutral {
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+@media (max-width: 768px) {
+  .posts-container {
+    padding: 1rem;
+  }
+  .posts-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .posts-grid {
+    grid-template-columns: 1fr;
+  }
+  .filters-toolbar {
+    flex-direction: column;
+    width: 100%;
+  }
+  .filter-select {
+    width: 100%;
+  }
+}

@@ -1,59 +1,40 @@
 import React, { useEffect, useState } from 'react';
-import {
-    analyzeBusinessReviewIntelligence,
-    analyzeReviewIntelligence,
-    getApiErrorMessage,
-    getBusinessReviewIntelligence,
-    getReviewIntelligence,
-} from '../api';
+import { getReviewIntelligence, analyzeReviewIntelligence } from '../api';
 import type { ReviewIntelligence as RIModel } from '../api';
 
-interface ReviewIntelligenceProps {
-    projectId: string;
-    businessId?: string;
-    businessName?: string;
-}
-
-const ReviewIntelligence: React.FC<ReviewIntelligenceProps> = ({ projectId, businessId, businessName }) => {
+const ReviewIntelligence: React.FC<{ projectId: string }> = ({ projectId }) => {
     const [intelligence, setIntelligence] = useState<RIModel | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
     const [analyzing, setAnalyzing] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        let active = true;
-        const loadData = async () => {
-            try {
-                const res = businessId
-                    ? await getBusinessReviewIntelligence(projectId, businessId)
-                    : await getReviewIntelligence(projectId);
-                if (!active) return;
-                setIntelligence(res.data);
-                setError(null);
-            } catch (err: unknown) {
-                if (!active) return;
-                const status = err && typeof err === 'object' && 'response' in err
-                    ? (err as { response?: { status?: number } }).response?.status
-                    : undefined;
-                if (status !== 404) setError("Failed to load review intelligence.");
-            } finally {
-                if (active) setLoading(false);
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            const res = await getReviewIntelligence(projectId);
+            setIntelligence(res.data);
+            setError(null);
+        } catch (err: any) {
+            if (err.response?.status !== 404) {
+                setError("Failed to load review intelligence.");
             }
-        };
-        void loadData();
-        return () => { active = false; };
-    }, [projectId, businessId]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadData();
+    }, [projectId]);
 
     const handleAnalyze = async () => {
         try {
             setAnalyzing(true);
             setError(null);
-            const res = businessId
-                ? await analyzeBusinessReviewIntelligence(projectId, businessId)
-                : await analyzeReviewIntelligence(projectId);
+            const res = await analyzeReviewIntelligence(projectId);
             setIntelligence(res.data);
-        } catch (err: unknown) {
-            setError(getApiErrorMessage(err, "Failed to analyze reviews."));
+        } catch (err: any) {
+            setError(err.response?.data?.detail || "Failed to analyze reviews.");
         } finally {
             setAnalyzing(false);
         }
@@ -61,19 +42,16 @@ const ReviewIntelligence: React.FC<ReviewIntelligenceProps> = ({ projectId, busi
 
     if (loading) {
         return (
-            <div className="card" style={{ padding: '1.5rem' }}>
-                <div className="skeleton skeleton-heading" />
-                <div className="skeleton skeleton-card" style={{ marginTop: '1rem', minHeight: '120px' }} />
+            <div className="card" style={{ padding: '2rem', textAlign: 'center', opacity: 0.7 }}>
+                <p>Loading Customer Voice...</p>
             </div>
         );
     }
 
     return (
         <div className="card" style={{ padding: '1.5rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>
-                    {businessName ? `${businessName} — Customer Voice` : 'Customer Voice (Review Intelligence)'}
-                </h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>Customer Voice (Review Intelligence)</h3>
                 <button
                     onClick={handleAnalyze}
                     disabled={analyzing}
@@ -92,10 +70,10 @@ const ReviewIntelligence: React.FC<ReviewIntelligenceProps> = ({ projectId, busi
                     <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.85rem' }}>Analyze reviews to unlock customer insights.</p>
                 </div>
             ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
 
                     {/* Top Stats */}
-                    <div style={{ gridColumn: '1 / -1', display: 'flex', flexWrap: 'wrap', gap: '1rem', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px' }}>
+                    <div style={{ gridColumn: '1 / -1', display: 'flex', gap: '1rem', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px' }}>
                         <div>
                             <span style={{ fontSize: '0.8rem', color: '#aaa', display: 'block' }}>Reviews Analyzed</span>
                             <span style={{ fontSize: '1.5rem', fontWeight: 600 }}>{intelligence.reviews_analyzed_count}</span>

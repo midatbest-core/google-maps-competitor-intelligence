@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
-import { getApiErrorMessage, getScrapeRuns, startScrape, getScrapeRun, resumeScrapeRun, deleteScrapeRun } from '../api';
+import { getScrapeRuns, startScrape, getScrapeRun, resumeScrapeRun, deleteScrapeRun } from '../api';
 import type { ScrapeRun, ScrapeRunCompetitor } from '../api';
 import './ProjectScraping.css';
 
@@ -34,17 +34,10 @@ const ProjectScraping: React.FC = () => {
 
   const pollTimerRef = useRef<number | null>(null);
 
-  const stopPolling = useCallback(() => {
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-  }, []);
 
-  const fetchRuns = useCallback(async () => {
-    if (!projectId) return;
+  const fetchRuns = async () => {
     try {
-      const runsRes = await getScrapeRuns(projectId);
+      const runsRes = await getScrapeRuns(projectId!);
 
       const sortedRuns = runsRes.data.sort((a, b) => {
         if (a.start_time && b.start_time) {
@@ -62,15 +55,16 @@ const ProjectScraping: React.FC = () => {
       } else if (!activeRunId && sortedRuns.length > 0) {
         setActiveRunId(sortedRuns[0].id);
       }
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Failed to load scrape runs'));
+    } catch (err: any) {
+      console.error(err);
+      setError('Failed to load scrape runs');
     } finally {
       setLoading(false);
     }
-  }, [projectId, activeRunId]);
+  };
 
 
-  const fetchActiveRunDetails = useCallback(async () => {
+  const fetchActiveRunDetails = async () => {
     if (!activeRunId) return;
     try {
       const res = await getScrapeRun(activeRunId);
@@ -83,33 +77,36 @@ const ProjectScraping: React.FC = () => {
         // We can slow down polling or stop, let's stop for now to prevent spam
         stopPolling();
       }
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Failed to load run details'));
+    } catch (err) {
+      console.error('Failed to load run details', err);
     }
-  }, [activeRunId, stopPolling]);
+  };
 
-  const startPolling = useCallback(() => {
+  const startPolling = () => {
     if (pollTimerRef.current) return;
     pollTimerRef.current = window.setInterval(() => {
-      void fetchActiveRunDetails();
-      void fetchRuns();
+      fetchActiveRunDetails();
+      fetchRuns();
     }, 4000);
-  }, [fetchActiveRunDetails, fetchRuns]);
+  };
+
+  const stopPolling = () => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
 
   useEffect(() => {
     if (projectId) {
-      // Async external-data synchronization; state updates occur after awaited requests.
-      // oxlint-disable-next-line react/set-state-in-effect
-      void fetchRuns();
+      fetchRuns();
     }
     return () => stopPolling();
-  }, [projectId, fetchRuns, stopPolling]);
+  }, [projectId]);
 
   useEffect(() => {
     if (activeRunId) {
-      // Async external-data synchronization; state updates occur after awaited requests.
-      // oxlint-disable-next-line react/set-state-in-effect
-      void fetchActiveRunDetails();
+      fetchActiveRunDetails();
 
       // If we select a run that is active, start polling
       const run = runs.find(r => r.id === activeRunId);
@@ -119,7 +116,7 @@ const ProjectScraping: React.FC = () => {
         stopPolling();
       }
     }
-  }, [activeRunId, runs, fetchActiveRunDetails, startPolling, stopPolling]);
+  }, [activeRunId]);
 
   const handleStartScrape = async () => {
     if (!projectId) return;
@@ -129,8 +126,13 @@ const ProjectScraping: React.FC = () => {
       const res = await startScrape(projectId);
       await fetchRuns();
       setActiveRunId(res.data.id);
-    } catch (err: unknown) {
-      setError(`Cannot start scrape: ${getApiErrorMessage(err, 'Failed to start scrape')}`);
+    } catch (err: any) {
+      console.error(err);
+      if (err.response?.data?.detail) {
+        setError(`Cannot start scrape: ${err.response.data.detail}`);
+      } else {
+        setError('Failed to start scrape');
+      }
       await fetchRuns(); // Refresh in case the backend failed stale runs
     } finally {
       setStarting(false);
@@ -154,8 +156,9 @@ const ProjectScraping: React.FC = () => {
         setActiveRunDetails(null);
       }
       await fetchRuns();
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Failed to delete run'));
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.detail || 'Failed to delete run');
     }
   };
 
@@ -168,8 +171,9 @@ const ProjectScraping: React.FC = () => {
       await fetchActiveRunDetails();
       await fetchRuns();
       startPolling();
-    } catch (err: unknown) {
-      setError(getApiErrorMessage(err, 'Failed to resume run'));
+    } catch (err: any) {
+      console.error(err);
+      setError(err.response?.data?.detail || 'Failed to resume run');
     } finally {
       setResuming(false);
     }
@@ -192,11 +196,7 @@ const ProjectScraping: React.FC = () => {
     return (
       <AppLayout projectId={projectId}>
         <div className="scraping-page loading-state">
-          <div className="skeleton skeleton-heading" />
-          <div className="skeleton-grid">
-            <div className="skeleton skeleton-card" />
-            <div className="skeleton skeleton-card" />
-          </div>
+          <p>Loading scrape runs...</p>
         </div>
       </AppLayout>
     );
@@ -279,12 +279,6 @@ const ProjectScraping: React.FC = () => {
                   </div>
                 )}
 
-                {activeRunDetails.error_logs && activeRunDetails.error_logs.length > 0 && (
-                  <div className="error-message" role="alert">
-                    {activeRunDetails.error_logs.join(' ')}
-                  </div>
-                )}
-
                 <div className="stats-grid">
                   <div className="stat-card">
                     <span className="stat-label">Total Attempted</span>
@@ -305,6 +299,20 @@ const ProjectScraping: React.FC = () => {
                     </span>
                   </div>
                 </div>
+
+                {['SUCCESS', 'PARTIAL_SUCCESS'].includes(activeRunDetails.status) && (
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
+                    <Link to={`/projects/${projectId}/posts`} className="btn-secondary" style={{ textDecoration: 'none' }}>
+                      View Extracted Posts →
+                    </Link>
+                    <Link to={`/projects/${projectId}/reviews`} className="btn-secondary" style={{ textDecoration: 'none' }}>
+                      View Customer Reviews →
+                    </Link>
+                    <Link to={`/projects/${projectId}/intelligence`} className="btn-primary" style={{ textDecoration: 'none' }}>
+                      ⚡ Synthesize Combined Intelligence →
+                    </Link>
+                  </div>
+                )}
 
                 <div className="competitors-section">
                   <h3>Competitor Results</h3>

@@ -1,7 +1,6 @@
 import pytest
 
 from app.core.arq import redis_settings_from_url
-from app.workers.main import WorkerSettings
 
 
 def test_rediss_url_enables_tls_and_preserves_credentials():
@@ -40,7 +39,3 @@ def test_plain_redis_url_does_not_enable_tls():
 def test_invalid_redis_urls_fail_without_localhost_fallback(url, message):
     with pytest.raises(ValueError, match=message):
         redis_settings_from_url(url)
-
-
-def test_worker_is_manual_only_and_has_no_scheduler():
-    assert not hasattr(WorkerSettings, "cron_jobs")

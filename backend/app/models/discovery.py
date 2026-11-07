@@ -51,6 +51,24 @@ class DiscoveryCandidate(Base, TimestampMixin):
 
     run = relationship("DiscoveryRun", back_populates="candidates")
 
+    @property
+    def distance_km(self) -> float | None:
+        if (
+            self.latitude is not None
+            and self.longitude is not None
+            and self.run
+            and self.run.latitude is not None
+            and self.run.longitude is not None
+        ):
+            import math
+            R = 6371.0
+            dlat = math.radians(self.latitude - self.run.latitude)
+            dlon = math.radians(self.longitude - self.run.longitude)
+            a = math.sin(dlat / 2)**2 + math.cos(math.radians(self.run.latitude)) * math.cos(math.radians(self.latitude)) * math.sin(dlon / 2)**2
+            c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+            return round(R * c, 1)
+        return None
+
     __table_args__ = (
         UniqueConstraint("discovery_run_id", "source_identifier", name="uq_discovery_candidate_source_id"),
     )

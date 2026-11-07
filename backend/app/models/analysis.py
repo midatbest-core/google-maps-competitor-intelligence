@@ -1,5 +1,5 @@
-﻿from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey, JSON, Float, Text, DateTime, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import String, ForeignKey, JSON, Float, Text, DateTime, UniqueConstraint, Integer
 from datetime import datetime, timezone
 from .base import Base, TimestampMixin, generate_uuid
 
@@ -79,5 +79,31 @@ class GeneratedContent(Base, TimestampMixin):
     regeneration_reason: Mapped[str | None] = mapped_column(Text)
 
     embedding = mapped_column(Vector(768))
+
+    project = relationship("Project")
+
+
+class IntelligenceReport(Base, TimestampMixin):
+    __tablename__ = "intelligence_reports"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    posts_analyzed: Mapped[int] = mapped_column(Integer, default=0)
+    reviews_analyzed: Mapped[int] = mapped_column(Integer, default=0)
+    competitors_analyzed: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Core Combined Intelligence Sections:
+    competitor_insights: Mapped[list[dict] | None] = mapped_column(JSON)
+    marketing_intelligence: Mapped[dict | None] = mapped_column(JSON)
+    strategic_disconnects: Mapped[list[dict] | None] = mapped_column(JSON)
+    business_opportunities: Mapped[list[dict] | None] = mapped_column(JSON)
+    actionable_recommendations: Mapped[list[dict] | None] = mapped_column(JSON)
+    content_ideas: Mapped[list[dict] | None] = mapped_column(JSON)
+
+    provider: Mapped[str | None] = mapped_column(String(50))
+    model_name: Mapped[str | None] = mapped_column(String(100))
+    status: Mapped[str] = mapped_column(String(50), default="COMPLETED")
+    error_message: Mapped[str | None] = mapped_column(Text)
 
     project = relationship("Project")

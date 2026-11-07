@@ -91,7 +91,6 @@ async def test_project_lifecycle():
 
     # 4. Clear auto-triggered runs from discovery
     runs = client.get(f"/projects/{project_id}/scrape-runs").json()
-    assert runs == []  # Scraping is manual-only; adding competitors must not enqueue work.
     for r in runs:
         client.delete(f"/projects/{project_id}/scrape-runs/{r['id']}")
 

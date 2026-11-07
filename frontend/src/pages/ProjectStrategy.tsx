@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { getAnalyticsSummary } from '../api';
 import type { AnalyticsSummaryResponse, DetailedTopicGap, DetailedKeywordGap, DetailedContentTypeGap } from '../api';
@@ -14,21 +14,22 @@ const ProjectStrategy: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!projectId) return;
-    let active = true;
-    const loadData = async () => {
-      try {
-        const res = await getAnalyticsSummary(projectId);
-        if (active) setAnalytics(res.data);
-      } catch {
-        if (active) setError('Failed to load content strategy.');
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    void loadData();
-    return () => { active = false; };
+    if (projectId) {
+      loadData();
+    }
   }, [projectId]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const res = await getAnalyticsSummary(projectId!);
+      setAnalytics(res.data);
+    } catch (err: unknown) {
+      setError('Failed to load content strategy.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const navigateToGenerate = (type: string, value: string) => {
     const params = new URLSearchParams();
@@ -71,9 +72,14 @@ const ProjectStrategy: React.FC = () => {
   return (
     <AppLayout projectId={projectId}>
       <div className="strategy-container">
-        <div className="strategy-header">
-          <h2>Content Strategy</h2>
-          <p>Actionable opportunities identified from competitor behavior.</p>
+        <div className="strategy-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <h2>Content Strategy & Market Gaps</h2>
+            <p>Actionable opportunities identified from competitor behavior.</p>
+          </div>
+          <Link to={`/projects/${projectId}/intelligence`} className="btn-primary" style={{ textDecoration: 'none' }}>
+            ⚡ Combined Intelligence Dashboard →
+          </Link>
         </div>
 
         <div className="strategy-sections">

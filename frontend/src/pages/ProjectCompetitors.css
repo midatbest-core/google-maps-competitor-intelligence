@@ -9,48 +9,9 @@
   border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: 12px;
   padding: 24px;
-  display: block;
-}
-
-.competitor-summary {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 20px;
-}
-
-.competitor-name-button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  padding: 0;
-  margin: 0 0 8px;
-  border: 0;
-  background: transparent;
-  color: white;
-  font: inherit;
-  font-size: 18px;
-  font-weight: 600;
-  text-align: left;
-}
-
-.competitor-name-button:hover,
-.competitor-name-button:focus-visible {
-  color: var(--primary-light);
-}
-
-.competitor-review-panel {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border-color);
-}
-
-@media (max-width: 700px) {
-  .competitor-card { padding: 18px; }
-  .competitor-summary { flex-direction: column; }
-  .competitor-status { align-items: flex-start !important; }
 }
 
 .competitor-info h3 {

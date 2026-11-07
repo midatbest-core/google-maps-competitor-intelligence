@@ -4,10 +4,10 @@ from .profile import BusinessProfile
 from .competitor import ProjectCompetitor
 from .post import Post, PostMedia
 from .scrape import ScrapeRun, ScrapeRunCompetitor, ScrapeObservation, ScrapeSchedule
-from .analysis import AIAnalysis, GeneratedContent, PostEmbedding
+from .analysis import AIAnalysis, GeneratedContent, PostEmbedding, IntelligenceReport
 from .auth import User, Workspace, WorkspaceMember
 from .discovery import DiscoveryRun, DiscoveryCandidate
-from .review import ReviewIntelligence
+from .review import Review, ReviewIntelligence
 
 __all__ = [
     "Base",
@@ -23,10 +23,12 @@ __all__ = [
     "AIAnalysis",
     "GeneratedContent",
     "PostEmbedding",
+    "IntelligenceReport",
     "User",
     "Workspace",
     "WorkspaceMember",
     "DiscoveryRun",
     "DiscoveryCandidate",
+    "Review",
     "ReviewIntelligence",
 ]

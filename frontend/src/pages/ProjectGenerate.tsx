@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
-import { getGeneration, startGeneration, regenerateContent } from '../api';
+import { startGeneration, regenerateContent, getGeneration, getGenerations } from '../api';
 import type { GenerationRequest, GeneratedContentResponse } from '../api';
 import ReviewIntelligence from '../components/ReviewIntelligence';
 import './ProjectGenerate.css';
@@ -15,20 +15,29 @@ const ProjectGenerate: React.FC = () => {
   const [topic, setTopic] = useState(searchParams.get('topic') || '');
   const [keyword, setKeyword] = useState(searchParams.get('keyword') || '');
   const [contentType, setContentType] = useState(searchParams.get('content_type') || '');
-  const [instruction, setInstruction] = useState('');
+  const [instruction, setInstruction] = useState(searchParams.get('campaign_context') || '');
 
   // UI State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Results
   const [generations, setGenerations] = useState<GeneratedContentResponse[]>([]);
+
+  // Load existing generations on mount
+  useEffect(() => {
+    if (projectId) {
+      getGenerations(projectId, 0, 15)
+        .then(res => setGenerations(res.data))
+        .catch(err => console.error("Could not load previous generations", err));
+    }
+  }, [projectId]);
 
   // Periodically check status if there are QUEUED/RUNNING tasks
   useEffect(() => {
     let interval: ReturnType<typeof window.setInterval>;
     const activeTasks = generations.some(g => g.status === 'QUEUED' || g.status === 'RUNNING');
-    
+
     if (activeTasks) {
       interval = setInterval(async () => {
         // Just refresh the whole history endpoint for simplicity, or we can fetch individually.
@@ -44,7 +53,7 @@ const ProjectGenerate: React.FC = () => {
             return g;
           }));
           setGenerations(updatedGens);
-        } catch {
+        } catch (err: unknown) {
           // preserve existing flow, do not crash or spam
         }
       }, 3000);
@@ -121,14 +130,14 @@ const ProjectGenerate: React.FC = () => {
               <div className="form-group">
                 <label>Generation Mode</label>
                 <div className="mode-toggle">
-                  <button 
+                  <button
                     type="button"
                     className={`mode-btn ${generationType === 'IDEA' ? 'active' : ''}`}
                     onClick={() => setGenerationType('IDEA')}
                   >
                     Brainstorm Ideas
                   </button>
-                  <button 
+                  <button
                     type="button"
                     className={`mode-btn ${generationType === 'FULL' ? 'active' : ''}`}
                     onClick={() => setGenerationType('FULL')}
@@ -140,40 +149,40 @@ const ProjectGenerate: React.FC = () => {
 
               <div className="form-group">
                 <label>Topic</label>
-                <input 
-                  type="text" 
-                  value={topic} 
-                  onChange={e => setTopic(e.target.value)} 
+                <input
+                  type="text"
+                  value={topic}
+                  onChange={e => setTopic(e.target.value)}
                   placeholder="e.g. Weekend Dining (Optional)"
                 />
               </div>
 
               <div className="form-group">
                 <label>Target Keyword</label>
-                <input 
-                  type="text" 
-                  value={keyword} 
-                  onChange={e => setKeyword(e.target.value)} 
+                <input
+                  type="text"
+                  value={keyword}
+                  onChange={e => setKeyword(e.target.value)}
                   placeholder="e.g. family dinner (Optional)"
                 />
               </div>
 
               <div className="form-group">
                 <label>Content Format</label>
-                <input 
-                  type="text" 
-                  value={contentType} 
-                  onChange={e => setContentType(e.target.value)} 
+                <input
+                  type="text"
+                  value={contentType}
+                  onChange={e => setContentType(e.target.value)}
                   placeholder="e.g. Offer (Optional)"
                 />
               </div>
 
               <div className="form-group">
                 <label>Instructions & Context</label>
-                <textarea 
+                <textarea
                   rows={4}
-                  value={instruction} 
-                  onChange={e => setInstruction(e.target.value)} 
+                  value={instruction}
+                  onChange={e => setInstruction(e.target.value)}
                   placeholder="e.g. We are offering a 20% discount on family dinners this weekend..."
                 />
               </div>
@@ -196,7 +205,7 @@ const ProjectGenerate: React.FC = () => {
               <div className="results-feed">
                 {generations.map(gen => (
                   <div key={gen.id} className={`generation-card status-${gen.status.toLowerCase()}`}>
-                    
+
                     <div className="gen-header">
                       <span className="gen-type">{gen.generation_type}</span>
                       <span className={`status-badge ${gen.status.toLowerCase()}`}>{gen.status.replace('_', ' ')}</span>
@@ -248,7 +257,7 @@ const ProjectGenerate: React.FC = () => {
                             <strong>Keywords:</strong> {gen.keywords.join(', ')}
                           </div>
                         )}
-                        
+
                         {gen.image_concept && (
                           <div className="content-image-concept">
                             <strong>Image Concept:</strong> {gen.image_concept}

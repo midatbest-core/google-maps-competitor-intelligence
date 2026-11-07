@@ -171,20 +171,30 @@ class AnalyticsService:
     def get_detailed_topic_gaps(self, project_id: str, limit: int = 10) -> List[Dict[str, Any]]:
         self._verify_project(project_id)
         project = self.db.query(Project).filter_by(id=project_id).first()
-        if not project or not project.own_business_id:
+        if not project:
             return []
             
         own_b_id = project.own_business_id
-        c_ids = [c.business_id for c in self.db.query(ProjectCompetitor).filter_by(project_id=project_id).all()]
-        if not c_ids:
+        all_comp_ids = [c.business_id for c in self.db.query(ProjectCompetitor).filter_by(project_id=project_id).all()]
+        if not all_comp_ids:
             return []
 
-        own_topics = self.db.query(
-            AIAnalysis.topic, func.count(Post.id)
-        ).join(Post).filter(
-            Post.business_id == own_b_id,
-            AIAnalysis.topic.isnot(None)
-        ).group_by(AIAnalysis.topic).all()
+        if own_b_id in all_comp_ids and len(all_comp_ids) == 1:
+            own_b_id = None
+            c_ids = all_comp_ids
+        else:
+            c_ids = [cid for cid in all_comp_ids if cid != own_b_id]
+            if not c_ids:
+                c_ids = all_comp_ids
+
+        own_topics = []
+        if own_b_id:
+            own_topics = self.db.query(
+                AIAnalysis.topic, func.count(Post.id)
+            ).join(Post).filter(
+                Post.business_id == own_b_id,
+                AIAnalysis.topic.isnot(None)
+            ).group_by(AIAnalysis.topic).all()
         
         comp_topics = self.db.query(
             AIAnalysis.topic, func.count(Post.id)
@@ -213,20 +223,28 @@ class AnalyticsService:
     def get_detailed_keyword_gaps(self, project_id: str, limit: int = 20) -> List[Dict[str, Any]]:
         self._verify_project(project_id)
         project = self.db.query(Project).filter_by(id=project_id).first()
-        if not project or not project.own_business_id:
+        if not project:
             return []
             
         own_b_id = project.own_business_id
-        c_ids = [c.business_id for c in self.db.query(ProjectCompetitor).filter_by(project_id=project_id).all()]
-        if not c_ids:
+        all_comp_ids = [c.business_id for c in self.db.query(ProjectCompetitor).filter_by(project_id=project_id).all()]
+        if not all_comp_ids:
             return []
 
-        # We process in memory as earlier
+        if own_b_id in all_comp_ids and len(all_comp_ids) == 1:
+            own_b_id = None
+            c_ids = all_comp_ids
+        else:
+            c_ids = [cid for cid in all_comp_ids if cid != own_b_id]
+            if not c_ids:
+                c_ids = all_comp_ids
+
         own_kws = {}
-        for (kw_list,) in self.db.query(AIAnalysis.keywords).join(Post).filter(Post.business_id == own_b_id, AIAnalysis.keywords.isnot(None)).all():
-            if isinstance(kw_list, list):
-                for kw in kw_list:
-                    own_kws[kw] = own_kws.get(kw, 0) + 1
+        if own_b_id:
+            for (kw_list,) in self.db.query(AIAnalysis.keywords).join(Post).filter(Post.business_id == own_b_id, AIAnalysis.keywords.isnot(None)).all():
+                if isinstance(kw_list, list):
+                    for kw in kw_list:
+                        own_kws[kw] = own_kws.get(kw, 0) + 1
                     
         comp_kws = {}
         for (kw_list,) in self.db.query(AIAnalysis.keywords).join(Post).filter(Post.business_id.in_(c_ids), AIAnalysis.keywords.isnot(None)).all():
@@ -251,20 +269,30 @@ class AnalyticsService:
     def get_content_type_gaps(self, project_id: str) -> List[Dict[str, Any]]:
         self._verify_project(project_id)
         project = self.db.query(Project).filter_by(id=project_id).first()
-        if not project or not project.own_business_id:
+        if not project:
             return []
             
         own_b_id = project.own_business_id
-        c_ids = [c.business_id for c in self.db.query(ProjectCompetitor).filter_by(project_id=project_id).all()]
-        if not c_ids:
+        all_comp_ids = [c.business_id for c in self.db.query(ProjectCompetitor).filter_by(project_id=project_id).all()]
+        if not all_comp_ids:
             return []
 
-        own_types = self.db.query(
-            AIAnalysis.content_type, func.count(Post.id)
-        ).join(Post).filter(
-            Post.business_id == own_b_id,
-            AIAnalysis.content_type.isnot(None)
-        ).group_by(AIAnalysis.content_type).all()
+        if own_b_id in all_comp_ids and len(all_comp_ids) == 1:
+            own_b_id = None
+            c_ids = all_comp_ids
+        else:
+            c_ids = [cid for cid in all_comp_ids if cid != own_b_id]
+            if not c_ids:
+                c_ids = all_comp_ids
+
+        own_types = []
+        if own_b_id:
+            own_types = self.db.query(
+                AIAnalysis.content_type, func.count(Post.id)
+            ).join(Post).filter(
+                Post.business_id == own_b_id,
+                AIAnalysis.content_type.isnot(None)
+            ).group_by(AIAnalysis.content_type).all()
         
         comp_types = self.db.query(
             AIAnalysis.content_type, func.count(Post.id)

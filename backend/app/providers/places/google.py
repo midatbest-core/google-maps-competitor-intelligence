@@ -17,11 +17,6 @@ PLACE_DETAILS_FIELD_MASK = (
     "id,displayName,formattedAddress,rating,userRatingCount,reviews"
 )
 PLACE_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,255}$")
-DISCOVERY_FIELD_MASK = (
-    "places.id,places.displayName,places.formattedAddress,places.location,"
-    "places.primaryTypeDisplayName,places.rating,places.userRatingCount,"
-    "places.websiteUri,places.googleMapsUri,places.nationalPhoneNumber,nextPageToken"
-)
 
 
 class GooglePlacesConfigurationError(ValueError):
@@ -93,74 +88,6 @@ class GooglePlacesClient:
                 address=address,
             )
             return await self._fetch_place_details(client, place_id)
-        finally:
-            if owns_client:
-                await client.aclose()
-
-    async def search_businesses(
-        self,
-        *,
-        query: str | None = None,
-        location: str | None = None,
-        category: str | None = None,
-        latitude: float | None = None,
-        longitude: float | None = None,
-        radius_km: int | None = None,
-        max_results: int = 20,
-    ) -> list[dict[str, Any]]:
-        self._require_api_key()
-        text_query = " ".join(
-            part.strip() for part in (query, category, location) if part and part.strip()
-        )
-        if not text_query:
-            raise GooglePlacesResolutionError(
-                "A query, category, or location is required for competitor discovery"
-            )
-
-        client = self.http_client or httpx.AsyncClient(timeout=self.timeout_seconds)
-        owns_client = self.http_client is None
-        results: list[dict[str, Any]] = []
-        page_token: str | None = None
-        try:
-            for _ in range(self.max_search_pages):
-                remaining = max_results - len(results)
-                if remaining <= 0:
-                    break
-                payload: dict[str, Any] = {
-                    "textQuery": text_query,
-                    "pageSize": min(20, remaining),
-                }
-                if page_token:
-                    payload["pageToken"] = page_token
-                elif latitude is not None and longitude is not None:
-                    radius_meters = min(max((radius_km or 50) * 1000, 1), 50000)
-                    payload["locationBias"] = {
-                        "circle": {
-                            "center": {
-                                "latitude": latitude,
-                                "longitude": longitude,
-                            },
-                            "radius": radius_meters,
-                        }
-                    }
-
-                response = await self._request(
-                    client,
-                    "POST",
-                    f"{PLACES_API_BASE_URL}/places:searchText",
-                    field_mask=DISCOVERY_FIELD_MASK,
-                    operation="competitor discovery",
-                    json=payload,
-                )
-                for place in response.get("places") or []:
-                    if place.get("id"):
-                        results.append(place)
-                    if len(results) >= max_results:
-                        break
-                page_token = response.get("nextPageToken")
-                if not page_token:
-                    break
-            return results
         finally:
             if owns_client:
                 await client.aclose()

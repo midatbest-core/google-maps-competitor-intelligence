@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
-import ReviewIntelligence from '../components/ReviewIntelligence';
 import { getProjectCompetitors, addDirectCompetitor, getProjectSummary, updateProject } from '../api';
 import type { Competitor } from '../api';
 import './ProjectCompetitors.css';
@@ -13,7 +12,6 @@ const ProjectCompetitors = () => {
   const [ownBusinessId, setOwnBusinessId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [expandedBusinessId, setExpandedBusinessId] = useState<string | null>(null);
   
   // Direct Add Form State
   const [showAddForm, setShowAddForm] = useState(false);
@@ -24,33 +22,33 @@ const ProjectCompetitors = () => {
   const [formError, setFormError] = useState('');
 
   useEffect(() => {
-    if (!projectId) return;
-    let active = true;
-    const loadData = async () => {
-      try {
-        const [compRes, projRes] = await Promise.all([
-          getProjectCompetitors(projectId),
-          getProjectSummary(projectId)
-        ]);
-        if (!active) return;
-        setCompetitors(compRes.data);
-        setOwnBusinessId(projRes.data.project.own_business_id || null);
-      } catch {
-        if (active) setError('Failed to load data');
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    void loadData();
-    return () => { active = false; };
+    if (projectId) {
+      loadData();
+    }
   }, [projectId]);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [compRes, projRes] = await Promise.all([
+        getProjectCompetitors(projectId!),
+        getProjectSummary(projectId!)
+      ]);
+      setCompetitors(compRes.data);
+      setOwnBusinessId(projRes.data.project.own_business_id || null);
+    } catch (err: any) {
+      setError('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const loadCompetitors = async () => {
     // legacy method for reloading just competitors if needed, though loadData is preferred now
     try {
       const compRes = await getProjectCompetitors(projectId!);
       setCompetitors(compRes.data);
-    } catch {
+    } catch (err: any) {
       setError('Failed to load competitors');
     }
   };
@@ -74,12 +72,9 @@ const ProjectCompetitors = () => {
       setFormName('');
       setFormUrl('');
       setFormAddress('');
-      await loadCompetitors();
-    } catch (err: unknown) {
-      const detail = err && typeof err === 'object' && 'response' in err
-        ? (err as { response?: { data?: { detail?: string } } }).response?.data?.detail
-        : undefined;
-      setFormError(detail || 'Failed to add competitor');
+      loadCompetitors();
+    } catch (err: any) {
+      setFormError(err.response?.data?.detail || 'Failed to add competitor');
     } finally {
       setFormSubmitting(false);
     }
@@ -89,7 +84,7 @@ const ProjectCompetitors = () => {
     try {
       await updateProject(projectId!, { own_business_id: businessId });
       setOwnBusinessId(businessId);
-    } catch {
+    } catch (err: any) {
       setError('Failed to update own business');
     }
   };
@@ -151,11 +146,7 @@ const ProjectCompetitors = () => {
           </div>
         )}
 
-        {loading && (
-          <div className="competitors-list" aria-label="Loading competitors">
-            {[0, 1, 2].map((item) => <div key={item} className="skeleton skeleton-card" />)}
-          </div>
-        )}
+        {loading && <div className="state-message">Loading competitors...</div>}
         {error && <div className="state-message error">{error}</div>}
 
         {!loading && !error && competitors.length === 0 && (
@@ -171,55 +162,34 @@ const ProjectCompetitors = () => {
         {!loading && !error && competitors.length > 0 && (
           <div className="competitors-list">
             {competitors.map(c => (
-              <div key={c.id} className={`competitor-card ${expandedBusinessId === c.business_id ? 'expanded' : ''}`}>
-                <div className="competitor-summary">
-                  <div className="competitor-info">
-                    <button
-                      type="button"
-                      className="competitor-name-button"
-                      aria-expanded={expandedBusinessId === c.business_id}
-                      onClick={() => setExpandedBusinessId(
-                        expandedBusinessId === c.business_id ? null : c.business_id
-                      )}
-                    >
-                      {c.business?.business_name || 'Unknown Business'}
-                      <span aria-hidden="true">{expandedBusinessId === c.business_id ? '−' : '+'}</span>
-                    </button>
-                    {c.business?.category && <span className="category-badge">{c.business.category}</span>}
-                    {c.business?.address && <p className="address">{c.business.address}</p>}
-                    {c.business?.google_maps_url && (
-                      <a href={c.business.google_maps_url} target="_blank" rel="noreferrer" className="maps-link">
-                        View on Maps &rarr;
-                      </a>
-                    )}
-                  </div>
-                  <div className="competitor-status" style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
-                    <div>
-                      <span className={`status-dot ${c.is_active ? 'active' : 'inactive'}`}></span>
-                      {c.is_active ? 'Active' : 'Inactive'}
-                    </div>
-                    {c.business_id === ownBusinessId ? (
-                      <span className="badge" style={{ backgroundColor: '#10b981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>Your Business</span>
-                    ) : (
-                      <button
-                        className="secondary-btn"
-                        style={{ padding: '4px 8px', fontSize: '0.8rem' }}
-                        onClick={() => handleSetOwnBusiness(c.business_id)}
-                      >
-                        Set as My Business
-                      </button>
-                    )}
-                  </div>
+              <div key={c.id} className="competitor-card">
+                <div className="competitor-info">
+                  <h3>{c.business?.business_name || 'Unknown Business'}</h3>
+                  {c.business?.category && <span className="category-badge">{c.business.category}</span>}
+                  {c.business?.address && <p className="address">{c.business.address}</p>}
+                  {c.business?.google_maps_url && (
+                    <a href={c.business.google_maps_url} target="_blank" rel="noreferrer" className="maps-link">
+                      View on Maps &rarr;
+                    </a>
+                  )}
                 </div>
-                {expandedBusinessId === c.business_id && projectId && (
-                  <div className="competitor-review-panel">
-                    <ReviewIntelligence
-                      projectId={projectId}
-                      businessId={c.business_id}
-                      businessName={c.business?.business_name}
-                    />
+                <div className="competitor-status" style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-end' }}>
+                  <div>
+                    <span className={`status-dot ${c.is_active ? 'active' : 'inactive'}`}></span>
+                    {c.is_active ? 'Active' : 'Inactive'}
                   </div>
-                )}
+                  {c.business_id === ownBusinessId ? (
+                    <span className="badge" style={{ backgroundColor: '#10b981', color: 'white', padding: '4px 8px', borderRadius: '4px', fontSize: '0.8rem' }}>Your Business</span>
+                  ) : (
+                    <button 
+                      className="secondary-btn" 
+                      style={{ padding: '4px 8px', fontSize: '0.8rem' }}
+                      onClick={() => handleSetOwnBusiness(c.business_id)}
+                    >
+                      Set as My Business
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

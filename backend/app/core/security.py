@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import Any, Literal, Union
+from typing import Any, Union
 from jose import jwt
 import bcrypt
 from pydantic_settings import BaseSettings
@@ -10,7 +10,7 @@ from pydantic import model_validator
 
 class SecuritySettings(BaseSettings):
     SECRET_KEY: str = "a_very_secret_key_for_development_only_change_in_prod"
-    ALGORITHM: Literal["HS256"] = "HS256"
+    ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7 # 7 days for dev
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")

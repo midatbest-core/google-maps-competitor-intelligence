@@ -1,7 +1,29 @@
-﻿from sqlalchemy.orm import Mapped, mapped_column, relationship
-from sqlalchemy import String, ForeignKey, Integer, Float, JSON, DateTime
 from datetime import datetime, timezone
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .base import Base, TimestampMixin, generate_uuid
+
+class Review(Base, TimestampMixin):
+    __tablename__ = "reviews"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    business_id: Mapped[str] = mapped_column(ForeignKey("business_profiles.id", ondelete="CASCADE"), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(50), default="browser_scraper")  # "google_places_api", "browser_scraper", "gosom_scraper"
+    source_id: Mapped[str | None] = mapped_column(String(255), index=True)
+    author_name: Mapped[str | None] = mapped_column(String(255))
+    author_photo_url: Mapped[str | None] = mapped_column(Text)
+    rating: Mapped[float | None] = mapped_column(Float)
+    text: Mapped[str | None] = mapped_column(Text)
+    language: Mapped[str | None] = mapped_column(String(20))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    relative_time_description: Mapped[str | None] = mapped_column(String(100))
+    response_text: Mapped[str | None] = mapped_column(Text)
+    response_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sentiment: Mapped[str | None] = mapped_column(String(50))
+    aspects: Mapped[list[str] | None] = mapped_column(JSON)
+    fingerprint: Mapped[str | None] = mapped_column(String(64), index=True)
+
+    business = relationship("BusinessProfile")
 
 class ReviewIntelligence(Base, TimestampMixin):
     __tablename__ = "review_intelligence"

@@ -3,7 +3,6 @@ from sqlalchemy.orm import Session
 from app.models.review import ReviewIntelligence
 from app.models.project import Project
 from app.models.profile import BusinessProfile
-from app.models.competitor import ProjectCompetitor
 from app.core.config import settings
 from datetime import datetime, timezone
 from app.providers.places import GooglePlacesClient, PlacesReviewResult
@@ -49,42 +48,20 @@ class ReviewService:
             self.db.refresh(business)
         return result
 
-    def _get_authorized_business(
-        self,
-        project_id: str,
-        business_id: str | None = None,
-    ) -> tuple[Project, BusinessProfile]:
+    async def analyze_project_reviews(self, project_id: str) -> ReviewIntelligence:
         project = self.db.query(Project).filter(Project.id == project_id).first()
         if not project or (
             self.workspace and project.workspace_id != self.workspace.id
         ):
             raise ValueError("Project not found")
 
-        business_id = business_id or project.own_business_id
+        business_id = project.own_business_id
         if not business_id:
             raise ValueError("Project has no own business configured")
 
-        is_own_business = project.own_business_id == business_id
-        is_competitor = self.db.query(ProjectCompetitor.id).filter(
-            ProjectCompetitor.project_id == project_id,
-            ProjectCompetitor.business_id == business_id,
-            ProjectCompetitor.is_active.is_(True),
-        ).first()
-        if not is_own_business and not is_competitor:
-            raise ValueError("Business is not part of this project")
-
         business = self.db.query(BusinessProfile).filter(BusinessProfile.id == business_id).first()
         if not business:
-            raise ValueError("Business could not be found")
-        return project, business
-
-    async def analyze_project_reviews(
-        self,
-        project_id: str,
-        business_id: str | None = None,
-    ) -> ReviewIntelligence:
-        _, business = self._get_authorized_business(project_id, business_id)
-        business_id = business.id
+            raise ValueError("Project's own business could not be found")
 
         # 1. Fetch reviews
         review_result = await self.fetch_google_reviews(business)
@@ -145,19 +122,64 @@ class ReviewService:
 
         return intel
 
-    def get_review_intelligence(
-        self,
-        project_id: str,
-        business_id: str | None = None,
-    ) -> ReviewIntelligence | None:
-        project, business = self._get_authorized_business(project_id, business_id)
+    def get_review_intelligence(self, project_id: str) -> ReviewIntelligence:
         query = self.db.query(ReviewIntelligence).join(
             Project,
             Project.id == ReviewIntelligence.project_id,
-        ).filter(
-            ReviewIntelligence.project_id == project.id,
-            ReviewIntelligence.business_id == business.id,
-        )
+        ).filter(ReviewIntelligence.project_id == project_id)
         if self.workspace:
             query = query.filter(Project.workspace_id == self.workspace.id)
-        return query.order_by(ReviewIntelligence.analyzed_at.desc()).first()
+        return query.first()
+
+    def get_project_reviews(
+        self,
+        project_id: str,
+        page: int = 1,
+        page_size: int = 20,
+        competitor_id: str | None = None,
+        sentiment: str | None = None,
+        source: str | None = None,
+    ):
+        project = self.db.query(Project).filter_by(id=project_id).first()
+        if not project or (self.workspace and project.workspace_id != self.workspace.id):
+            raise ValueError("Project not found")
+
+        from app.models.competitor import ProjectCompetitor
+        from app.models.review import Review
+        from app.schemas.review import ReviewResponse, ReviewListResponse
+        from sqlalchemy import desc
+
+        if competitor_id:
+            comp = self.db.query(ProjectCompetitor).filter_by(project_id=project_id, business_id=competitor_id).first()
+            if not comp and project.own_business_id != competitor_id:
+                raise ValueError("Competitor not found in project")
+            business_ids = [competitor_id]
+        else:
+            comp_ids = [c.business_id for c in self.db.query(ProjectCompetitor).filter_by(project_id=project_id, is_active=True).all()]
+            business_ids = comp_ids
+            if project.own_business_id and project.own_business_id not in business_ids:
+                business_ids.append(project.own_business_id)
+
+        if not business_ids:
+            return ReviewListResponse(items=[], total=0, page=page, page_size=page_size, pages=0)
+
+        query = self.db.query(Review).filter(Review.business_id.in_(business_ids))
+        if sentiment:
+            query = query.filter(Review.sentiment == sentiment.upper())
+        if source:
+            query = query.filter(Review.source == source)
+
+        total = query.count()
+        offset = max(0, (page - 1) * page_size)
+        reviews = query.order_by(Review.published_at.desc().nulls_last(), Review.created_at.desc()).offset(offset).limit(page_size).all()
+
+        biz_map = {b.id: b.business_name for b in self.db.query(BusinessProfile).filter(BusinessProfile.id.in_(business_ids)).all()}
+
+        items = []
+        for r in reviews:
+            resp = ReviewResponse.model_validate(r)
+            resp.business_name = biz_map.get(r.business_id, "Unknown")
+            items.append(resp)
+
+        pages = (total + page_size - 1) // page_size if total > 0 else 0
+        return ReviewListResponse(items=items, total=total, page=page, page_size=page_size, pages=pages)

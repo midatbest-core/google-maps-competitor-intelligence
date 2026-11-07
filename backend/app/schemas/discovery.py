@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -59,6 +59,7 @@ class DiscoveryCandidateResponse(BaseModel):
     website: Optional[str] = None
     status: str
     relevance_score: Optional[float] = None
+    distance_km: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 

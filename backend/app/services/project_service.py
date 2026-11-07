@@ -1,4 +1,4 @@
-﻿from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session
 from app.repositories.project_repo import ProjectRepository
 from app.repositories.business_repo import BusinessProfileRepository
 from app.schemas.project import ProjectCreate
@@ -62,13 +62,23 @@ class ProjectService:
         ).all()
 
         post_count = 0
+        review_count = 0
         if business_ids:
             post_count = self.db.scalar(
                 select(func.count(Post.id)).where(Post.business_id.in_(business_ids))
             ) or 0
+            from app.models.review import Review
+            review_count = self.db.scalar(
+                select(func.count(Review.id)).where(Review.business_id.in_(business_ids))
+            ) or 0
 
         gc_count = self.db.scalar(
             select(func.count(GeneratedContent.id)).where(GeneratedContent.project_id == project_id)
+        ) or 0
+
+        from app.models.analysis import IntelligenceReport
+        intel_count = self.db.scalar(
+            select(func.count(IntelligenceReport.id)).where(IntelligenceReport.project_id == project_id)
         ) or 0
 
         latest_scrape = self.db.scalar(
@@ -83,7 +93,9 @@ class ProjectService:
             project=project,
             competitor_count=competitor_count,
             post_count=post_count,
+            review_count=review_count,
             generated_content_count=gc_count,
+            intelligence_count=intel_count,
             latest_scrape=latest_scrape.id if latest_scrape else None,
             latest_scrape_status=latest_scrape.status if latest_scrape else None,
             discovery_count=discovery_count

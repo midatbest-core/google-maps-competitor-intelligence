@@ -1,50 +1,58 @@
 from .base import DiscoveryProvider
 from app.schemas.discovery import DiscoveryCandidateSchema
-from typing import List
-from app.providers.places import GooglePlacesClient
-from app.core.config import settings
+from typing import List, Optional
+from app.scraper.google_maps.browser import BrowserManager
+import logging
+
+logger = logging.getLogger(__name__)
 
 class GoogleMapsDiscoveryProvider(DiscoveryProvider):
-    def __init__(self, places_client: GooglePlacesClient | None = None):
-        self.places_client = places_client or GooglePlacesClient(
-            settings.GOOGLE_PLACES_API_KEY,
-            timeout_seconds=settings.GOOGLE_PLACES_TIMEOUT_SECONDS,
-            max_search_pages=settings.GOOGLE_PLACES_MAX_SEARCH_PAGES,
-        )
+    def __init__(self):
+        self.browser_manager: Optional[BrowserManager] = None
 
     @property
     def provider_name(self) -> str:
-        return "google_places"
+        return "google_maps"
 
     async def discover(self, query: str = None, location: str = None, latitude: float = None, longitude: float = None, radius: int = None, category: str = None) -> List[DiscoveryCandidateSchema]:
-        places = await self.places_client.search_businesses(
-            query=query,
-            location=location,
-            category=category,
-            latitude=latitude,
-            longitude=longitude,
-            radius_km=radius,
-            max_results=20,
-        )
+        search_query = ""
+        if query: search_query += query
+        if category and category not in search_query:
+            search_query += f" {category}"
+        if location:
+            search_query += f" near {location}"
+            
+        if not search_query.strip():
+            search_query = "businesses"
+
+        self.browser_manager = BrowserManager()
+        page = await self.browser_manager.start()
         candidates = []
-        for place in places:
-            location_data = place.get("location") or {}
-            candidates.append(
-                DiscoveryCandidateSchema(
-                    source_identifier=place.get("id"),
-                    source_url=place.get("googleMapsUri"),
-                    business_name=(place.get("displayName") or {}).get("text") or "Unknown business",
-                    category=(place.get("primaryTypeDisplayName") or {}).get("text"),
-                    address=place.get("formattedAddress"),
-                    latitude=location_data.get("latitude"),
-                    longitude=location_data.get("longitude"),
-                    rating=place.get("rating"),
-                    review_count=place.get("userRatingCount"),
-                    phone=place.get("nationalPhoneNumber"),
-                    website=place.get("websiteUri"),
-                )
-            )
+        try:
+            url = f"https://www.google.com/maps/search/{search_query.replace(' ', '+')}"
+            await page.goto(url, wait_until="domcontentloaded")
+            await page.wait_for_timeout(3000)
+            
+            elements = await page.query_selector_all('a[href*="/maps/place/"]')
+            for el in elements[:10]:
+                href = await el.get_attribute('href')
+                name = await el.get_attribute('aria-label')
+                if href and name:
+                    candidates.append(DiscoveryCandidateSchema(
+                        source_url=href,
+                        business_name=name
+                    ))
+        except Exception as e:
+            logger.error(f"Error in GoogleMaps discovery: {e}")
+            raise e
+        finally:
+            if self.browser_manager:
+                await self.browser_manager.stop()
+                self.browser_manager = None
+                
         return candidates
         
     async def close(self):
-        return None
+        if self.browser_manager:
+            await self.browser_manager.stop()
+            self.browser_manager = None

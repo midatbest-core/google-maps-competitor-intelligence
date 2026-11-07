@@ -95,3 +95,36 @@
   margin-top: auto;
   width: 100%;
 }
+
+.priority-high {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.priority-medium {
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.priority-low {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+}
+
+@media (max-width: 768px) {
+  .strategy-container {
+    padding: 1rem;
+  }
+  .strategy-header {
+    margin-bottom: 1.5rem;
+  }
+  .strategy-header h2 {
+    font-size: 1.5rem;
+  }
+  .opportunity-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { getProjectPosts, getAnalyticsSummary, getProjectCompetitors } from '../api';
 import type { Competitor, PostResponse, AnalyticsSummaryResponse, TopicFrequency, KeywordFrequency, DetailedTopicGap } from '../api';
@@ -27,52 +27,48 @@ const ProjectPosts: React.FC = () => {
   const hasAnalysis = searchParams.get('has_analysis') || '';
 
   useEffect(() => {
-    if (!projectId) return;
-    let active = true;
-    const loadMetadata = async () => {
-      const [competitorResult, analyticsResult] = await Promise.allSettled([
-        getProjectCompetitors(projectId),
-        getAnalyticsSummary(projectId),
-      ]);
-      if (!active) return;
-      if (competitorResult.status === 'fulfilled') {
-        setCompetitors(competitorResult.value.data);
-      }
-      if (analyticsResult.status === 'fulfilled') {
-        setAnalytics(analyticsResult.value.data);
-      }
-    };
-    void loadMetadata();
-    return () => { active = false; };
-  }, [projectId]);
-
-  useEffect(() => {
-    if (!projectId) return;
-    let active = true;
-    const loadPosts = async () => {
-      try {
-        const params: Record<string, string | number | boolean | undefined> = { page, page_size: 20 };
-        if (search) params.search = search;
-        if (competitorId) params.competitor_id = competitorId;
-        if (topic) params.topic = topic;
-        if (hasAnalysis === 'true') params.has_analysis = true;
-        else if (hasAnalysis === 'false') params.has_analysis = false;
-
-        const postsRes = await getProjectPosts(projectId, params);
-        if (!active) return;
-        setPosts(postsRes.data.items);
-        setTotal(postsRes.data.total);
-        setPages(postsRes.data.pages);
-        setError(null);
-      } catch {
-        if (active) setError('Failed to load posts repository.');
-      } finally {
-        if (active) setLoading(false);
-      }
-    };
-    void loadPosts();
-    return () => { active = false; };
+    if (projectId) {
+      loadData();
+    }
   }, [projectId, page, search, competitorId, topic, hasAnalysis]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      // Load analytics summary in background without blocking posts feed
+      if (!analytics) {
+        getAnalyticsSummary(projectId!)
+          .then((anRes) => setAnalytics(anRes.data))
+          .catch((e) => console.error("Failed to load analytics", e));
+      }
+
+      // Load competitors for the filter dropdown
+      if (competitors.length === 0) {
+        getProjectCompetitors(projectId!)
+          .then((compRes) => setCompetitors(compRes.data))
+          .catch(() => {});
+      }
+
+      // Load posts immediately
+      const params: Record<string, string | number | boolean | undefined> = { page, page_size: 20 };
+      if (search) params.search = search;
+      if (competitorId) params.competitor_id = competitorId;
+      if (topic) params.topic = topic;
+      if (hasAnalysis === 'true') params.has_analysis = true;
+      else if (hasAnalysis === 'false') params.has_analysis = false;
+
+      const postsRes = await getProjectPosts(projectId!, params);
+      setPosts(postsRes.data.items);
+      setTotal(postsRes.data.total);
+      setPages(postsRes.data.pages);
+      
+    } catch (err) {
+      setError('Failed to load posts repository.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleFilterChange = (key: string, value: string) => {
     const newParams = new URLSearchParams(searchParams);
@@ -145,9 +141,19 @@ const ProjectPosts: React.FC = () => {
         
         {renderIntelligenceDashboard()}
 
-        <div className="posts-header-row">
-          <h2 style={{margin:0}}>Posts Repository</h2>
-          <span className="post-count-badge">{total} posts found</span>
+        <div className="posts-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div>
+            <h2 style={{margin:0}}>Posts Repository</h2>
+            <span className="post-count-badge">{total} posts found</span>
+          </div>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Link to={`/projects/${projectId}/reviews`} className="btn-secondary" style={{ textDecoration: 'none', fontSize: '13px' }}>
+              Customer Reviews →
+            </Link>
+            <Link to={`/projects/${projectId}/intelligence`} className="btn-primary" style={{ textDecoration: 'none', fontSize: '13px' }}>
+              ⚡ Combined Intelligence →
+            </Link>
+          </div>
         </div>
 
         <div className="filters-bar">

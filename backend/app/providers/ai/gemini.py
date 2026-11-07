@@ -5,7 +5,11 @@ from typing import Any, TypeVar
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from app.schemas.analysis import AIAnalysisResult, AIReviewAnalysisResult
+from app.schemas.analysis import (
+    AIAnalysisResult,
+    AIReviewAnalysisResult,
+    CombinedIntelligenceOutput,
+)
 from app.schemas.generation import AIStructuredOutput
 
 from .base import AIProvider
@@ -84,6 +88,14 @@ class GeminiProvider(AIProvider):
         return await self._generate_structured(
             full_prompt,
             AIReviewAnalysisResult,
+        )
+
+    async def generate_combined_intelligence(
+        self, prompt: str
+    ) -> tuple[CombinedIntelligenceOutput, dict]:
+        return await self._generate_structured(
+            prompt,
+            CombinedIntelligenceOutput,
         )
 
     async def _generate_structured(

@@ -1,6 +1,33 @@
-from pydantic import BaseModel
-from typing import List, Optional
 from datetime import datetime
+from typing import List, Optional
+from pydantic import BaseModel, ConfigDict
+
+class ReviewResponse(BaseModel):
+    id: str
+    business_id: str
+    business_name: Optional[str] = None
+    source: str
+    source_id: Optional[str] = None
+    author_name: Optional[str] = None
+    author_photo_url: Optional[str] = None
+    rating: Optional[float] = None
+    text: Optional[str] = None
+    language: Optional[str] = None
+    published_at: Optional[datetime] = None
+    relative_time_description: Optional[str] = None
+    response_text: Optional[str] = None
+    sentiment: Optional[str] = None
+    aspects: Optional[List[str]] = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ReviewListResponse(BaseModel):
+    items: List[ReviewResponse]
+    total: int
+    page: int
+    page_size: int
+    pages: int
 
 class ReviewIntelligenceResponse(BaseModel):
     id: str
@@ -24,3 +51,5 @@ class ReviewIntelligenceResponse(BaseModel):
     analysis_provider: Optional[str] = None
     model_version: Optional[str] = None
     analyzed_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

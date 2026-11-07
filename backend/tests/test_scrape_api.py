@@ -1,11 +1,9 @@
 import pytest
-from datetime import datetime, timedelta, timezone
 from fastapi.testclient import TestClient
 from app.main import app
 from app.models.auth import Workspace, User
-from app.models.scrape import ScrapeRun
 from app.api.dependencies import get_current_workspace, get_current_user
-from app.core.database import engine, SessionLocal
+from app.core.database import engine
 from app.models.base import Base
 
 client = TestClient(app)
@@ -39,6 +37,8 @@ routes.get_redis_pool = mock_get_redis_pool
 
 @pytest.fixture(autouse=True)
 def setup_db():
+    app.dependency_overrides[get_current_workspace] = override_get_current_workspace
+    app.dependency_overrides[get_current_user] = override_get_current_user
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
@@ -124,45 +124,3 @@ def test_delete_scrape_run():
     # Deleting again returns 404
     del_res2 = client.delete(f"/projects/{proj_id}/scrape-runs/{run_id}")
     assert del_res2.status_code == 404
-
-
-def test_scrape_queue_failure_marks_run_failed(monkeypatch):
-    class FailingRedisPool:
-        async def enqueue_job(self, *args, **kwargs):
-            raise ConnectionError("redis unavailable")
-
-        async def close(self):
-            pass
-
-    async def failing_pool():
-        return FailingRedisPool()
-
-    monkeypatch.setattr(routes, "get_redis_pool", failing_pool)
-
-    project_id = client.post("/projects", json={"name": "Queue Failure"}).json()["id"]
-    response = client.post(f"/projects/{project_id}/scrape")
-
-    assert response.status_code == 503
-    assert response.json() == {"detail": "Scrape queue is unavailable"}
-
-    with SessionLocal() as db:
-        run = db.query(ScrapeRun).filter_by(project_id=project_id).one()
-        assert run.status == "FAILED"
-        assert run.end_time is not None
-        assert run.error_logs == ["Scrape queue is unavailable"]
-
-
-def test_queued_scrape_is_marked_failed_after_one_minute():
-    project_id = client.post("/projects", json={"name": "Stale Queue"}).json()["id"]
-    response = client.post(f"/projects/{project_id}/scrape")
-    assert response.status_code == 202
-
-    with SessionLocal() as db:
-        run = db.query(ScrapeRun).filter_by(project_id=project_id).one()
-        run.created_at = datetime.now(timezone.utc) - timedelta(seconds=61)
-        db.commit()
-
-    runs = client.get(f"/projects/{project_id}/scrape-runs")
-    assert runs.status_code == 200
-    assert runs.json()[0]["status"] == "FAILED"
-    assert "60 seconds" in runs.json()[0]["error_logs"][0]

@@ -1,29 +1,7 @@
 import axios from 'axios';
 
-export const getApiErrorMessage = (error: unknown, fallback = 'Something went wrong') => {
-  if (!error || typeof error !== 'object' || !('response' in error)) return fallback;
-  const detail = (error as { response?: { data?: { detail?: unknown } } }).response?.data?.detail;
-  if (typeof detail === 'string') return detail;
-  if (Array.isArray(detail)) {
-    return detail
-      .map((item) => {
-        if (!item || typeof item !== 'object') return String(item);
-        const issue = item as { loc?: Array<string | number>; msg?: string };
-        const field = issue.loc?.filter((part) => part !== 'body').join('.');
-        return `${field ? `${field}: ` : ''}${issue.msg || 'Invalid value'}`;
-      })
-      .join(' ');
-  }
-  return fallback;
-};
-
-export const notifyError = (message: string) => {
-  window.dispatchEvent(new CustomEvent('app:error', { detail: message }));
-};
-
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL || '/api', // Use env var if available, else fallback to proxy
-  timeout: 30000,
 });
 
 api.interceptors.request.use((config) => {
@@ -37,11 +15,14 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && window.location.pathname !== '/login') {
-      localStorage.removeItem('token');
-      window.location.assign('/login');
-    } else if (error.response?.status !== 401) {
-      notifyError(getApiErrorMessage(error, 'The request could not be completed'));
+    if (error.response && error.response.status === 401) {
+      const url = error.config?.url || '';
+      if (!url.includes('/auth/login') && !url.includes('/auth/register')) {
+        localStorage.removeItem('token');
+        if (window.location.pathname !== '/login') {
+          window.location.href = '/login';
+        }
+      }
     }
     return Promise.reject(error);
   }
@@ -119,6 +100,7 @@ export interface DiscoveryCandidate {
   website?: string;
   status: string;
   relevance_score?: number;
+  distance_km?: number;
 }
 
 export const getProjectCompetitors = (projectId: string) => api.get<Competitor[]>(`/projects/${projectId}/competitors`);
@@ -130,6 +112,10 @@ export const getDiscoveryRun = (projectId: string, runId: string) => api.get<Dis
 export const getDiscoveryCandidates = (projectId: string, skip = 0, limit = 50) => api.get<DiscoveryCandidate[]>(`/projects/${projectId}/discovery-candidates`, { params: { skip, limit } });
 export const selectDiscoveryCandidate = (projectId: string, candidateId: string) => api.post<Competitor>(`/projects/${projectId}/discovery-candidates/${candidateId}/select`);
 export const rejectDiscoveryCandidate = (projectId: string, candidateId: string) => api.post<DiscoveryCandidate>(`/projects/${projectId}/discovery-candidates/${candidateId}/reject`);
+export const bulkSelectDiscoveryCandidates = (projectId: string, candidateIds: string[]) =>
+  api.post<Competitor[]>(`/projects/${projectId}/discovery-candidates/bulk-select`, { candidate_ids: candidateIds });
+export const bulkRejectDiscoveryCandidates = (projectId: string, candidateIds: string[]) =>
+  api.post<DiscoveryCandidate[]>(`/projects/${projectId}/discovery-candidates/bulk-reject`, { candidate_ids: candidateIds });
 
 export interface ScrapeRunCompetitor {
   id: string;
@@ -151,7 +137,6 @@ export interface ScrapeRun {
   competitors_attempted: number;
   competitors_succeeded: number;
   competitors_failed: number;
-  error_logs?: string[];
   competitor_runs?: ScrapeRunCompetitor[];
 }
 
@@ -345,7 +330,113 @@ export interface ReviewIntelligence {
 
 export const getReviewIntelligence = (projectId: string) => api.get<ReviewIntelligence>(`/projects/${projectId}/review-intelligence`);
 export const analyzeReviewIntelligence = (projectId: string) => api.post<ReviewIntelligence>(`/projects/${projectId}/review-intelligence`);
-export const getBusinessReviewIntelligence = (projectId: string, businessId: string) =>
-  api.get<ReviewIntelligence>(`/projects/${projectId}/businesses/${businessId}/review-intelligence`);
-export const analyzeBusinessReviewIntelligence = (projectId: string, businessId: string) =>
-  api.post<ReviewIntelligence>(`/projects/${projectId}/businesses/${businessId}/review-intelligence`);
+
+// Reviews API
+export interface ReviewItem {
+  id: string;
+  business_id: string;
+  business_name?: string;
+  source: string;
+  source_id?: string;
+  author_name?: string;
+  author_photo_url?: string;
+  rating?: number;
+  text?: string;
+  language?: string;
+  published_at?: string;
+  relative_time_description?: string;
+  response_text?: string;
+  sentiment?: string;
+  aspects?: string[];
+  created_at: string;
+}
+
+export interface ReviewListResponse {
+  items: ReviewItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  pages: number;
+}
+
+export const getProjectReviews = (projectId: string, params?: Record<string, string | number | boolean | undefined>) =>
+  api.get<ReviewListResponse>(`/projects/${projectId}/reviews`, { params });
+
+// Combined Intelligence API
+export interface SupportingEvidence {
+  source_type: 'post' | 'review';
+  business_name?: string;
+  quote_or_summary: string;
+}
+
+export interface ActionableRecommendation {
+  title: string;
+  description: string;
+  category: string;
+  rationale: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  supporting_evidence: SupportingEvidence[];
+}
+
+export interface StrategicDisconnect {
+  competitor_name: string;
+  advertised_promise: string;
+  customer_reality: string;
+  opportunity: string;
+  recommended_action: string;
+}
+
+export interface CompetitorInsightItem {
+  competitor_name: string;
+  strengths: string[];
+  weaknesses: string[];
+  customer_sentiment: string;
+  recurring_complaints: string[];
+  marketing_patterns: string[];
+  positioning: string;
+}
+
+export interface MarketingIntelligenceSection {
+  frequently_promoted_topics: string[];
+  common_offers: string[];
+  posting_frequency: string;
+  content_formats: string[];
+  effective_ctas: string[];
+}
+
+export interface ContentIdeaItem {
+  title: string;
+  hook: string;
+  angle: string;
+  suggested_format: string;
+  target_audience: string;
+  evidence_backed_reason: string;
+}
+
+export interface CombinedIntelligenceReport {
+  id: string;
+  project_id: string;
+  posts_analyzed: number;
+  reviews_analyzed: number;
+  competitors_analyzed: number;
+  competitor_insights?: CompetitorInsightItem[];
+  marketing_intelligence?: MarketingIntelligenceSection;
+  strategic_disconnects?: StrategicDisconnect[];
+  business_opportunities?: string[];
+  actionable_recommendations?: ActionableRecommendation[];
+  content_ideas?: ContentIdeaItem[];
+  provider?: string;
+  model_name?: string;
+  status: string;
+  error_message?: string;
+  created_at: string;
+}
+
+export const getProjectIntelligence = (projectId: string) =>
+  api.get<CombinedIntelligenceReport>(`/projects/${projectId}/intelligence`);
+
+export const generateProjectIntelligence = (projectId: string) =>
+  api.post<CombinedIntelligenceReport>(`/projects/${projectId}/intelligence/analyze`);
+
+export const getProjectIntelligenceHistory = (projectId: string) =>
+  api.get<CombinedIntelligenceReport[]>(`/projects/${projectId}/intelligence/history`);

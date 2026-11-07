@@ -1,40 +1,35 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from app.api.dependencies import get_discovery_service
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from app.api.dependencies import get_discovery_service, get_scrape_service
 from app.services.discovery_service import DiscoveryService
+from app.services.scrape_service import ScrapeService
 from app.schemas.discovery import DiscoveryRunCreate, DiscoveryRunResponse, DiscoveryCandidateResponse, DirectCompetitorCreate
 from app.schemas.competitor import CompetitorResponse
 from app.core.arq import get_redis_pool
+from app.workers.main import scrape_job, discovery_job
 from typing import List
 
 discovery_router = APIRouter(tags=["discovery"])
 
-async def _enqueue_discovery_run(run, service: DiscoveryService) -> None:
-    pool = None
-    try:
-        pool = await get_redis_pool()
-        await pool.enqueue_job("discovery_job", run.id)
-    except Exception as exc:
-        service.mark_enqueue_failed(run.id)
-        raise HTTPException(
-            status_code=503,
-            detail="Discovery queue is unavailable",
-        ) from exc
-    finally:
-        if pool is not None:
-            try:
-                await pool.close()
-            except Exception:
-                pass
-
 @discovery_router.post("/projects/{project_id}/discovery", response_model=DiscoveryRunResponse, status_code=status.HTTP_201_CREATED)
-async def start_discovery(project_id: str, payload: DiscoveryRunCreate, service: DiscoveryService = Depends(get_discovery_service)):
+async def start_discovery(
+    project_id: str,
+    payload: DiscoveryRunCreate,
+    background_tasks: BackgroundTasks,
+    service: DiscoveryService = Depends(get_discovery_service)
+):
     try:
         run = service.create_discovery_run(project_id, payload)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
         
-    await _enqueue_discovery_run(run, service)
+    try:
+        pool = await get_redis_pool()
+        await pool.enqueue_job("discovery_job", run.id)
+        await pool.close()
+    except Exception:
+        pass
         
+    background_tasks.add_task(discovery_job, None, run.id)
     return run
 
 @discovery_router.get("/projects/{project_id}/discovery-runs", response_model=List[DiscoveryRunResponse])
@@ -54,14 +49,40 @@ def list_candidates(project_id: str, skip: int = 0, limit: int = 50, service: Di
         limit = 100
     return service.get_candidates(project_id, skip=skip, limit=limit)
 
+from pydantic import BaseModel
+from typing import List
+
+class BulkCandidateAction(BaseModel):
+    candidate_ids: List[str]
+
+@discovery_router.post("/projects/{project_id}/discovery-candidates/bulk-select", response_model=List[CompetitorResponse])
+def bulk_select_candidates(
+    project_id: str,
+    payload: BulkCandidateAction,
+    service: DiscoveryService = Depends(get_discovery_service)
+):
+    try:
+        return service.bulk_select_candidates(project_id, payload.candidate_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@discovery_router.post("/projects/{project_id}/discovery-candidates/bulk-reject", response_model=List[DiscoveryCandidateResponse])
+def bulk_reject_candidates(
+    project_id: str,
+    payload: BulkCandidateAction,
+    service: DiscoveryService = Depends(get_discovery_service)
+):
+    try:
+        return service.bulk_reject_candidates(project_id, payload.candidate_ids)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @discovery_router.post("/projects/{project_id}/discovery-candidates/{candidate_id}/select", response_model=CompetitorResponse)
 def select_candidate(project_id: str, candidate_id: str, service: DiscoveryService = Depends(get_discovery_service)):
     try:
-        comp = service.select_candidate(project_id, candidate_id)
+        return service.select_candidate(project_id, candidate_id)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-        
-    return comp
 
 @discovery_router.post("/projects/{project_id}/discovery-candidates/{candidate_id}/reject", response_model=DiscoveryCandidateResponse)
 def reject_candidate(project_id: str, candidate_id: str, service: DiscoveryService = Depends(get_discovery_service)):
@@ -74,19 +95,23 @@ def reject_candidate(project_id: str, candidate_id: str, service: DiscoveryServi
 @discovery_router.post("/projects/{project_id}/competitors/direct", response_model=CompetitorResponse)
 def add_direct_competitor(project_id: str, payload: DirectCompetitorCreate, service: DiscoveryService = Depends(get_discovery_service)):
     try:
-        comp = service.add_direct_competitor(project_id, payload)
+        return service.add_direct_competitor(project_id, payload)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-        
-    return comp
 
 @discovery_router.post("/projects/{project_id}/discovery-runs/{run_id}/resume", response_model=DiscoveryRunResponse)
-async def resume_discovery(project_id: str, run_id: str, service: DiscoveryService = Depends(get_discovery_service)):
+async def resume_discovery(project_id: str, run_id: str, background_tasks: BackgroundTasks, service: DiscoveryService = Depends(get_discovery_service)):
     try:
         run = service.resume_discovery(project_id, run_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
         
-    await _enqueue_discovery_run(run, service)
-        
+    try:
+        pool = await get_redis_pool()
+        await pool.enqueue_job("discovery_job", run.id)
+        await pool.close()
+    except Exception:
+        pass
+
+    background_tasks.add_task(discovery_job, None, run.id)
     return run

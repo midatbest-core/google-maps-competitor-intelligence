@@ -34,3 +34,7 @@ class AIProvider(abc.ABC):
     @abc.abstractmethod
     async def analyze_reviews(self, prompt: str, reviews_text: str) -> tuple[Any, dict]:
         pass
+
+    @abc.abstractmethod
+    async def generate_combined_intelligence(self, prompt: str) -> tuple[Any, dict]:
+        pass

@@ -11,28 +11,30 @@ class AuthService:
         if self.db.query(User).filter_by(email=payload.email).first():
             raise ValueError("Email already registered")
 
-        try:
-            user = User(
-                email=payload.email,
-                hashed_password=get_password_hash(payload.password),
-                full_name=payload.full_name,
-            )
-            ws = Workspace(name=f"{payload.email.split('@')[0]}'s Workspace")
-            self.db.add_all([user, ws])
-            self.db.flush()
-            self.db.add(
-                WorkspaceMember(
-                    workspace_id=ws.id,
-                    user_id=user.id,
-                    role="OWNER",
-                )
-            )
-            self.db.commit()
-            self.db.refresh(user)
-            return user
-        except Exception:
-            self.db.rollback()
-            raise
+        # Create user
+        user = User(
+            email=payload.email,
+            hashed_password=get_password_hash(payload.password),
+            full_name=payload.full_name
+        )
+        self.db.add(user)
+        self.db.commit()
+
+        # Create default workspace
+        ws = Workspace(name=f"{payload.email.split('@')[0]}'s Workspace")
+        self.db.add(ws)
+        self.db.commit()
+
+        # Create membership
+        member = WorkspaceMember(
+            workspace_id=ws.id,
+            user_id=user.id,
+            role="OWNER"
+        )
+        self.db.add(member)
+        self.db.commit()
+
+        return user
 
     def get_user_by_email(self, email: str) -> User:
         return self.db.query(User).filter_by(email=email).first()

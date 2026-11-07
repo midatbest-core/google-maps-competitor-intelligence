@@ -4,9 +4,8 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.scrape import ScrapeRun, ScrapeRunCompetitor, ScrapeObservation
 from app.models.post import Post
-from app.models.discovery import DiscoveryRun
 from app.scraper.google_maps.adapter import GoogleMapsAdapter
-from app.core.arq import redis_settings_from_url
+from arq.connections import RedisSettings
 from app.services.ingestion_service import IngestionService
 from app.services.media_downloader import SimpleMediaDownloader
 from app.core.storage import LocalStorageProvider
@@ -24,6 +23,33 @@ async def shutdown(ctx):
         await adapter.close()
 
 async def scrape_job(ctx, run_id: str):
+    import sys
+    import asyncio
+    try:
+        current_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+
+    # On Windows, Playwright requires a ProactorEventLoop to spawn browser processes.
+    # If the current loop is not a ProactorEventLoop (e.g. Uvicorn with SelectorEventLoop),
+    # execute in a thread with a ProactorEventLoop.
+    if sys.platform == "win32" and current_loop and not isinstance(current_loop, getattr(asyncio, "ProactorEventLoop", ())):
+        import concurrent.futures
+        def _proactor_runner():
+            proactor = asyncio.ProactorEventLoop()
+            asyncio.set_event_loop(proactor)
+            try:
+                return proactor.run_until_complete(_execute_scrape_job(ctx, run_id))
+            finally:
+                proactor.close()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            return await current_loop.run_in_executor(executor, _proactor_runner)
+
+    return await _execute_scrape_job(ctx, run_id)
+
+
+async def _execute_scrape_job(ctx, run_id: str):
     logger.info(f"Starting scrape job for run {run_id}")
 
     # Allow adapter to be mocked or retrieved from context
@@ -91,9 +117,18 @@ async def scrape_job(ctx, run_id: str):
                             except Exception as e:
                                 logger.error(f"Failed to enqueue intelligence job for {res.post_id}: {e}")
                         else:
-                            # Run synchronously or in background if no ARQ
-                            import asyncio
-                            asyncio.create_task(intelligence_job(None, res.post_id))
+                            try:
+                                await intelligence_job(ctx, res.post_id)
+                            except Exception as e:
+                                logger.error(f"Failed to run intelligence job for {res.post_id}: {e}")
+
+                # Collect reviews for this business
+                try:
+                    from app.services.review_collector import ReviewCollectorService
+                    review_collector = ReviewCollectorService(db)
+                    await review_collector.collect_for_business(c.business, max_browser_reviews=50)
+                except Exception as e:
+                    logger.warning(f"Failed to collect reviews for business {c.business_id}: {e}")
 
                 db.commit()
             elif result.status == "NO_DATA":
@@ -164,6 +199,30 @@ async def intelligence_job(ctx, post_id: str):
 
 
 async def discovery_job(ctx, run_id: str):
+    import sys
+    import asyncio
+    try:
+        current_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+
+    if sys.platform == "win32" and current_loop and not isinstance(current_loop, getattr(asyncio, "ProactorEventLoop", ())):
+        import concurrent.futures
+        def _proactor_runner():
+            proactor = asyncio.ProactorEventLoop()
+            asyncio.set_event_loop(proactor)
+            try:
+                return proactor.run_until_complete(_execute_discovery_job(ctx, run_id))
+            finally:
+                proactor.close()
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            return await current_loop.run_in_executor(executor, _proactor_runner)
+
+    return await _execute_discovery_job(ctx, run_id)
+
+
+async def _execute_discovery_job(ctx, run_id: str):
     logger.info(f"Starting discovery job for run {run_id}")
     db = SessionLocal()
     try:
@@ -177,15 +236,6 @@ async def discovery_job(ctx, run_id: str):
     except Exception as e:
         logger.exception(f"Error in discovery job for run {run_id}")
         db.rollback()
-        try:
-            failed_run = db.query(DiscoveryRun).filter_by(id=run_id).first()
-            if failed_run:
-                failed_run.status = "FAILED"
-                failed_run.completed_at = datetime.now(timezone.utc)
-                failed_run.error_message = "Discovery worker failed before completion"
-                db.commit()
-        except Exception:
-            logger.exception("Failed to persist discovery worker failure")
     finally:
         db.close()
 
@@ -209,15 +259,102 @@ async def generate_content_job(ctx, content_id: str):
     finally:
         db.close()
 
+async def scheduler_tick(ctx):
+    logger.info("Running scheduler tick")
+    db = SessionLocal()
+    try:
+        from app.services.scrape_service import ScrapeService
+        from sqlalchemy import select
+        from app.models.scrape import ScrapeSchedule, ScrapeRun
+
+        now = datetime.now(timezone.utc)
+
+        schedules = db.scalars(
+            select(ScrapeSchedule)
+            .where(ScrapeSchedule.enabled == True)
+            .where(ScrapeSchedule.next_run_at <= now)
+        ).all()
+
+        service = ScrapeService(db)
+
+        for schedule in schedules:
+            new_next_run_at = service.calculate_next_run(schedule.time_of_day, schedule.timezone, now=now)
+
+            # Atomic claim
+            from sqlalchemy import update
+            stmt = (
+                update(ScrapeSchedule)
+                .where(ScrapeSchedule.id == schedule.id)
+                .where(ScrapeSchedule.next_run_at == schedule.next_run_at)
+                .values(
+                    last_run_at=now,
+                    next_run_at=new_next_run_at
+                )
+            )
+            result = db.execute(stmt)
+
+            if result.rowcount == 0:
+                logger.info(f"Schedule for project {schedule.project_id} already claimed by another worker")
+                db.rollback() # Release any locks
+                continue
+
+            db.commit() # Commit the claim immediately so other workers see it
+
+            # Check for active run
+            active_run = db.scalar(
+                select(ScrapeRun)
+                .where(ScrapeRun.project_id == schedule.project_id)
+                .where(ScrapeRun.status.in_(["QUEUED", "RUNNING", "RETRYING", "PAUSED_MANUAL_INTERVENTION"]))
+                .limit(1)
+            )
+
+            if not active_run:
+                logger.info(f"scheduled_scrape_started: Project {schedule.project_id}")
+                try:
+                    run = service.create_scrape_run(schedule.project_id)
+                    if ctx and 'redis' in ctx:
+                        await ctx['redis'].enqueue_job('scrape_job', run.id)
+                except Exception as e:
+                    logger.error(f"scheduled_scrape_failed: Project {schedule.project_id}: {e}")
+            else:
+                logger.info(f"scheduled_scrape_skipped_active_run: Project {schedule.project_id}")
+
+    except Exception as e:
+        logger.exception("Error in scheduler_tick")
+    finally:
+        db.close()
+
+async def combined_intelligence_job(ctx, project_id: str):
+    logger.info(f"Starting combined intelligence job for project {project_id}")
+    db = SessionLocal()
+    try:
+        from app.services.combined_intelligence_service import CombinedIntelligenceService
+        from app.providers.ai.factory import get_ai_provider
+
+        ai_provider = get_ai_provider()
+        service = CombinedIntelligenceService(db, ai_provider)
+        report = await service.generate_report(project_id)
+        logger.info(f"Finished combined intelligence job for project {project_id}, status: {getattr(report, 'status', 'SUCCESS')}")
+        return report
+    except Exception as e:
+        logger.exception(f"Error in combined intelligence job for project {project_id}: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
 def get_redis_settings():
-    return redis_settings_from_url(
-        settings.REDIS_URL,
-        conn_timeout=1,
-        conn_retries=5,
-    )
+    import urllib.parse
+    parsed = urllib.parse.urlparse(settings.REDIS_URL)
+    host = parsed.hostname or "localhost"
+    port = parsed.port or 6379
+    database = int(parsed.path.strip("/")) if parsed.path and parsed.path.strip("/") else 0
+    password = parsed.password
+    return RedisSettings(host=host, port=port, database=database, password=password)
 
 class WorkerSettings:
-    functions = [scrape_job, intelligence_job, discovery_job, generate_content_job]
+    functions = [scrape_job, intelligence_job, discovery_job, generate_content_job, combined_intelligence_job]
+    from arq.cron import cron
+    cron_jobs = [cron(scheduler_tick, minute=set(range(60)))]
     redis_settings = get_redis_settings()
     on_startup = startup
     on_shutdown = shutdown

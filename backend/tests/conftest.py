@@ -4,14 +4,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 # Mock environment variables for testing
+os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["REDIS_URL"] = "redis://localhost:6379/0"
+os.environ["AI_PROVIDER"] = "fake"
 
 from app.models.base import Base
-
-# Try to use SQLite for tests if Postgres is unavailable, 
-# but note that pgvector features will not work on SQLite natively.
-# For demonstration in restricted environments, we'll use in-memory sqlite.
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
 
 engine = create_engine(

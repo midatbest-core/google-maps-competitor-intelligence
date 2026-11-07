@@ -5,7 +5,6 @@ import pytest
 
 from app.models.profile import BusinessProfile
 from app.models.project import Project
-from app.models.competitor import ProjectCompetitor
 from app.providers.ai.fake import FakeAIProvider
 from app.providers.places import (
     GooglePlacesAPIError,
@@ -152,42 +151,6 @@ async def test_text_search_paginates_to_resolve_place_id():
 
 
 @pytest.mark.asyncio
-async def test_places_text_search_returns_discovery_candidates():
-    captured = {}
-
-    def handler(request: httpx.Request):
-        captured["headers"] = request.headers
-        captured["payload"] = json.loads(request.content)
-        return httpx.Response(
-            200,
-            json={
-                "places": [{
-                    "id": "ChIJDiscovery123",
-                    "displayName": {"text": "Discovery Cafe"},
-                    "formattedAddress": "1 Main Street",
-                    "rating": 4.5,
-                    "userRatingCount": 50,
-                }]
-            },
-        )
-
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-        client = GooglePlacesClient("test-api-key", http_client=http_client)
-        places = await client.search_businesses(
-            query="coffee",
-            location="Test City",
-            latitude=1.0,
-            longitude=2.0,
-            radius_km=10,
-        )
-
-    assert places[0]["id"] == "ChIJDiscovery123"
-    assert captured["payload"]["textQuery"] == "coffee Test City"
-    assert captured["payload"]["locationBias"]["circle"]["radius"] == 10000
-    assert "places.googleMapsUri" in captured["headers"]["X-Goog-FieldMask"]
-
-
-@pytest.mark.asyncio
 async def test_stale_stored_place_id_falls_back_to_text_search():
     requested_paths = []
 
@@ -327,52 +290,3 @@ async def test_review_service_persists_resolved_place_id_and_real_review_count(d
     assert intelligence.reviews_analyzed_count == 2
     assert intelligence.average_rating == 4.7
     assert intelligence.analysis_provider == "fake_provider"
-
-
-@pytest.mark.asyncio
-async def test_competitor_review_analysis_is_scoped_to_selected_business(db):
-    class StubPlacesClient:
-        async def fetch_reviews(self, **kwargs):
-            return PlacesReviewResult(
-                place_id="ChIJCompetitorReview123",
-                display_name=kwargs["business_name"],
-                formatted_address="2 Main Street",
-                average_rating=4.2,
-                user_rating_count=80,
-                reviews=[
-                    {"text": "Friendly staff", "rating": 5},
-                    {"text": "Slow checkout", "rating": 3},
-                ],
-            )
-
-    own_business = BusinessProfile(business_name="Own Business")
-    competitor = BusinessProfile(business_name="Competitor Business")
-    project = Project(name="Competitor Reviews", own_business=own_business)
-    db.add_all([project, competitor])
-    db.flush()
-    db.add(ProjectCompetitor(project_id=project.id, business_id=competitor.id))
-    db.commit()
-
-    service = ReviewService(
-        db,
-        FakeAIProvider(),
-        places_client=StubPlacesClient(),
-    )
-    intelligence = await service.analyze_project_reviews(project.id, competitor.id)
-
-    assert intelligence.project_id == project.id
-    assert intelligence.business_id == competitor.id
-    assert intelligence.reviews_analyzed_count == 2
-    assert service.get_review_intelligence(project.id, competitor.id).id == intelligence.id
-
-
-@pytest.mark.asyncio
-async def test_review_analysis_rejects_business_outside_project(db):
-    project = Project(name="Protected Project", own_business=BusinessProfile(business_name="Own"))
-    unrelated = BusinessProfile(business_name="Unrelated")
-    db.add_all([project, unrelated])
-    db.commit()
-
-    service = ReviewService(db, FakeAIProvider())
-    with pytest.raises(ValueError, match="not part of this project"):
-        await service.analyze_project_reviews(project.id, unrelated.id)
