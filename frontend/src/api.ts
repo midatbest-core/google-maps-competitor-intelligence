@@ -105,17 +105,22 @@ export interface DiscoveryCandidate {
 
 export const getProjectCompetitors = (projectId: string) => api.get<Competitor[]>(`/projects/${projectId}/competitors`);
 export const addDirectCompetitor = (projectId: string, data: DirectCompetitorCreate) => api.post<Competitor>(`/projects/${projectId}/competitors/direct`, data);
+export const deleteProjectCompetitor = (projectId: string, competitorId: string) => api.delete(`/projects/${projectId}/competitors/${competitorId}`);
 
 export const startDiscovery = (projectId: string, data: Record<string, string | number | boolean | undefined>) => api.post<DiscoveryRun>(`/projects/${projectId}/discovery`, data);
 export const getDiscoveryRuns = (projectId: string) => api.get<DiscoveryRun[]>(`/projects/${projectId}/discovery-runs`);
 export const getDiscoveryRun = (projectId: string, runId: string) => api.get<DiscoveryRun>(`/projects/${projectId}/discovery-runs/${runId}`);
 export const getDiscoveryCandidates = (projectId: string, skip = 0, limit = 50) => api.get<DiscoveryCandidate[]>(`/projects/${projectId}/discovery-candidates`, { params: { skip, limit } });
 export const selectDiscoveryCandidate = (projectId: string, candidateId: string) => api.post<Competitor>(`/projects/${projectId}/discovery-candidates/${candidateId}/select`);
+export const unselectDiscoveryCandidate = (projectId: string, candidateId: string) => api.post<DiscoveryCandidate>(`/projects/${projectId}/discovery-candidates/${candidateId}/unselect`);
 export const rejectDiscoveryCandidate = (projectId: string, candidateId: string) => api.post<DiscoveryCandidate>(`/projects/${projectId}/discovery-candidates/${candidateId}/reject`);
+export const deleteDiscoveryCandidate = (projectId: string, candidateId: string) => api.delete(`/projects/${projectId}/discovery-candidates/${candidateId}`);
 export const bulkSelectDiscoveryCandidates = (projectId: string, candidateIds: string[]) =>
   api.post<Competitor[]>(`/projects/${projectId}/discovery-candidates/bulk-select`, { candidate_ids: candidateIds });
 export const bulkRejectDiscoveryCandidates = (projectId: string, candidateIds: string[]) =>
   api.post<DiscoveryCandidate[]>(`/projects/${projectId}/discovery-candidates/bulk-reject`, { candidate_ids: candidateIds });
+export const bulkDeleteDiscoveryCandidates = (projectId: string, candidateIds: string[]) =>
+  api.post<{ deleted: number }>(`/projects/${projectId}/discovery-candidates/bulk-delete`, { candidate_ids: candidateIds });
 
 export interface ScrapeRunCompetitor {
   id: string;

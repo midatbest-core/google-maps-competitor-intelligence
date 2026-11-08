@@ -5,6 +5,7 @@ import { useToast } from '../context/ToastContext';
 import {
   getProjectCompetitors,
   addDirectCompetitor,
+  deleteProjectCompetitor,
   getProjectSummary,
   updateProject,
 } from '../api';
@@ -19,7 +20,8 @@ import {
   ExternalLink,
   Check,
   RefreshCw,
-  X
+  X,
+  Trash2
 } from 'lucide-react';
 import './ProjectCompetitors.css';
 
@@ -102,6 +104,23 @@ const ProjectCompetitors = () => {
       showToast(`Set "${businessName}" as your primary business!`, 'success');
     } catch (err: any) {
       showToast('Failed to update primary business', 'error');
+    }
+  };
+
+  const handleRemoveCompetitor = async (competitorId: string, businessName: string, isOwn: boolean) => {
+    if (isOwn) {
+      const confirm = window.confirm(`"${businessName}" is your designated primary business. Are you sure you want to remove it from the roster?`);
+      if (!confirm) return;
+    }
+    try {
+      await deleteProjectCompetitor(projectId!, competitorId);
+      showToast(`Removed "${businessName}" from roster`, 'info');
+      if (isOwn) {
+        setOwnBusinessId(null);
+      }
+      await loadData();
+    } catch (err: any) {
+      showToast('Failed to remove competitor from roster', 'error');
     }
   };
 
@@ -335,15 +354,25 @@ const ProjectCompetitors = () => {
                       <span className="text-dim" style={{ fontSize: '12px' }}>No Maps Link</span>
                     )}
 
-                    {!isOwn && (
+                    <div className="roster-actions-group">
+                      {!isOwn && (
+                        <button
+                          className="btn-set-own"
+                          onClick={() => handleSetOwnBusiness(c.business_id, name)}
+                          title="Set this profile as your primary business"
+                        >
+                          Set as My Business
+                        </button>
+                      )}
                       <button
-                        className="btn-set-own"
-                        onClick={() => handleSetOwnBusiness(c.business_id, name)}
-                        title="Set this profile as your primary business"
+                        className="btn-remove-roster"
+                        onClick={() => handleRemoveCompetitor(c.id, name, isOwn)}
+                        title="Remove competitor from project roster"
                       >
-                        Set as My Business
+                        <Trash2 size={13} />
+                        <span>Remove</span>
                       </button>
-                    )}
+                    </div>
                   </div>
                 </div>
               );

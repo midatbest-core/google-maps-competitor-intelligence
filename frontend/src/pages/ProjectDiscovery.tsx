@@ -7,9 +7,13 @@ import {
   startDiscovery,
   getDiscoveryCandidates,
   selectDiscoveryCandidate,
+  unselectDiscoveryCandidate,
   rejectDiscoveryCandidate,
+  deleteDiscoveryCandidate,
   bulkSelectDiscoveryCandidates,
   bulkRejectDiscoveryCandidates,
+  bulkDeleteDiscoveryCandidates,
+  addDirectCompetitor,
 } from '../api';
 import type { DiscoveryRun, DiscoveryCandidate } from '../api';
 import {
@@ -26,9 +30,13 @@ import {
   Square,
   Users,
   ArrowRight,
-  Info
+  Info,
+  Plus,
+  Trash2
 } from 'lucide-react';
 import './ProjectDiscovery.css';
+
+type StatusFilter = 'ALL' | 'NEW' | 'ADDED' | 'DECLINED';
 
 const ProjectDiscovery = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -39,7 +47,7 @@ const ProjectDiscovery = () => {
   const [candidates, setCandidates] = useState<DiscoveryCandidate[]>([]);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
 
-  // Form State
+  // Form State - Scout Search
   const [showDiscoveryForm, setShowDiscoveryForm] = useState(false);
   const [formQuery, setFormQuery] = useState('');
   const [formLocation, setFormLocation] = useState('');
@@ -48,8 +56,16 @@ const ProjectDiscovery = () => {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Form State - Direct Add
+  const [showDirectAddForm, setShowDirectAddForm] = useState(false);
+  const [directName, setDirectName] = useState('');
+  const [directUrl, setDirectUrl] = useState('');
+  const [directAddress, setDirectAddress] = useState('');
+  const [directSubmitting, setDirectSubmitting] = useState(false);
+  const [directError, setDirectError] = useState('');
+
   // Filters & Search
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'NEW' | 'SELECTED' | 'ALREADY_COMPETITOR' | 'REJECTED'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Multi-selection state
@@ -158,6 +174,37 @@ const ProjectDiscovery = () => {
     }
   };
 
+  const handleAddDirect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!directName.trim()) {
+      setDirectError('Business name is required');
+      return;
+    }
+
+    try {
+      setDirectSubmitting(true);
+      setDirectError('');
+      await addDirectCompetitor(projectId!, {
+        business_name: directName.trim(),
+        source_url: directUrl.trim() || undefined,
+        address: directAddress.trim() || undefined,
+      });
+
+      showToast(`Added "${directName.trim()}" to competitor roster!`, 'success');
+      setShowDirectAddForm(false);
+      setDirectName('');
+      setDirectUrl('');
+      setDirectAddress('');
+      await Promise.all([loadRuns(), loadCandidates()]);
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || 'Failed to add competitor';
+      setDirectError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setDirectSubmitting(false);
+    }
+  };
+
   const handleSelect = async (candidateId: string) => {
     try {
       await selectDiscoveryCandidate(projectId!, candidateId);
@@ -175,10 +222,22 @@ const ProjectDiscovery = () => {
     }
   };
 
+  const handleRemoveFromRoster = async (candidateId: string, name: string) => {
+    try {
+      await unselectDiscoveryCandidate(projectId!, candidateId);
+      showToast(`Removed "${name}" from competitor roster. Will not be scraped.`, 'info');
+      setCandidates(prev =>
+        prev.map(c => (c.id === candidateId ? { ...c, status: 'NEW' } : c))
+      );
+    } catch (err: any) {
+      showToast('Failed to remove competitor from roster', 'error');
+    }
+  };
+
   const handleReject = async (candidateId: string) => {
     try {
       await rejectDiscoveryCandidate(projectId!, candidateId);
-      showToast('Candidate dismissed.', 'info');
+      showToast('Candidate declined.', 'info');
       setCandidates(prev =>
         prev.map(c => (c.id === candidateId ? { ...c, status: 'REJECTED' } : c))
       );
@@ -188,7 +247,22 @@ const ProjectDiscovery = () => {
         return next;
       });
     } catch (err: any) {
-      showToast('Failed to reject candidate', 'error');
+      showToast('Failed to decline candidate', 'error');
+    }
+  };
+
+  const handleDeleteCandidate = async (candidateId: string, name: string) => {
+    try {
+      await deleteDiscoveryCandidate(projectId!, candidateId);
+      showToast(`Removed "${name}" from discovery`, 'info');
+      setCandidates(prev => prev.filter(c => c.id !== candidateId));
+      setSelectedIds(prev => {
+        const next = new Set(prev);
+        next.delete(candidateId);
+        return next;
+      });
+    } catch (err: any) {
+      showToast('Failed to delete candidate', 'error');
     }
   };
 
@@ -239,13 +313,29 @@ const ProjectDiscovery = () => {
       setBulkSubmitting(true);
       const ids = Array.from(selectedIds);
       await bulkRejectDiscoveryCandidates(projectId!, ids);
-      showToast(`Dismissed ${ids.length} candidates.`, 'info');
+      showToast(`Declined ${ids.length} candidates.`, 'info');
       setCandidates(prev =>
         prev.map(c => (ids.includes(c.id) ? { ...c, status: 'REJECTED' } : c))
       );
       setSelectedIds(new Set());
     } catch (err: any) {
-      showToast('Failed to reject candidates', 'error');
+      showToast('Failed to decline candidates', 'error');
+    } finally {
+      setBulkSubmitting(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      setBulkSubmitting(true);
+      const ids = Array.from(selectedIds);
+      await bulkDeleteDiscoveryCandidates(projectId!, ids);
+      showToast(`Deleted ${ids.length} candidates from discovery.`, 'info');
+      setCandidates(prev => prev.filter(c => !ids.includes(c.id)));
+      setSelectedIds(new Set());
+    } catch (err: any) {
+      showToast('Failed to delete candidates', 'error');
     } finally {
       setBulkSubmitting(false);
     }
@@ -254,7 +344,10 @@ const ProjectDiscovery = () => {
   // Filtered candidate list
   const filteredCandidates = useMemo(() => {
     return candidates.filter(cand => {
-      if (statusFilter !== 'ALL' && cand.status !== statusFilter) return false;
+      if (statusFilter === 'NEW' && cand.status !== 'NEW') return false;
+      if (statusFilter === 'ADDED' && cand.status !== 'SELECTED' && cand.status !== 'ALREADY_COMPETITOR') return false;
+      if (statusFilter === 'DECLINED' && cand.status !== 'REJECTED') return false;
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchesName = (cand.business_name || '').toLowerCase().includes(q);
@@ -271,9 +364,8 @@ const ProjectDiscovery = () => {
     return {
       all: candidates.length,
       new: candidates.filter(c => c.status === 'NEW').length,
-      selected: candidates.filter(c => c.status === 'SELECTED').length,
-      already: candidates.filter(c => c.status === 'ALREADY_COMPETITOR').length,
-      rejected: candidates.filter(c => c.status === 'REJECTED').length,
+      added: candidates.filter(c => c.status === 'SELECTED' || c.status === 'ALREADY_COMPETITOR').length,
+      declined: candidates.filter(c => c.status === 'REJECTED').length,
     };
   }, [candidates]);
 
@@ -311,8 +403,21 @@ const ProjectDiscovery = () => {
             <span>Roster</span>
           </button>
           <button
+            className="secondary-btn"
+            onClick={() => {
+              setShowDirectAddForm(!showDirectAddForm);
+              if (showDiscoveryForm) setShowDiscoveryForm(false);
+            }}
+          >
+            <Plus size={15} />
+            <span>{showDirectAddForm ? 'Cancel Add' : 'Add Direct'}</span>
+          </button>
+          <button
             className="primary-btn"
-            onClick={() => setShowDiscoveryForm(!showDiscoveryForm)}
+            onClick={() => {
+              setShowDiscoveryForm(!showDiscoveryForm);
+              if (showDirectAddForm) setShowDirectAddForm(false);
+            }}
           >
             <Search size={15} />
             <span>{showDiscoveryForm ? 'Close Search' : 'New Scout Search'}</span>
@@ -348,6 +453,87 @@ const ProjectDiscovery = () => {
                 Searching within <strong>{activeRun.radius || 10} km radius</strong> for businesses. Candidates will populate automatically below.
               </p>
             </div>
+          </div>
+        )}
+
+        {/* Direct Add Form Collapsible in Discovery */}
+        {showDirectAddForm && (
+          <div className="discovery-search-panel animate-slide-in" style={{ borderColor: 'rgba(99, 102, 241, 0.3)' }}>
+            <div className="search-panel-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Plus size={18} className="text-primary" />
+                <h3>Add Direct Competitor</h3>
+              </div>
+              <button
+                className="close-panel-btn"
+                onClick={() => setShowDirectAddForm(false)}
+                aria-label="Close direct add form"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {directError && (
+              <div className="error-banner">
+                <Info size={16} />
+                <span>{directError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAddDirect} className="scout-form">
+              <div className="form-grid">
+                <div className="form-field">
+                  <label>Business Name *</label>
+                  <input
+                    type="text"
+                    value={directName}
+                    onChange={e => setDirectName(e.target.value)}
+                    placeholder="e.g. Starbucks, The Daily Cafe"
+                    required
+                  />
+                  <span className="field-hint">Name of competitor business to add directly</span>
+                </div>
+
+                <div className="form-field">
+                  <label>Google Maps URL (Optional)</label>
+                  <input
+                    type="url"
+                    value={directUrl}
+                    onChange={e => setDirectUrl(e.target.value)}
+                    placeholder="https://maps.google.com/..."
+                  />
+                  <span className="field-hint">Direct link to Google Maps place</span>
+                </div>
+              </div>
+
+              <div className="form-field mt-3">
+                <label>Address (Optional)</label>
+                <input
+                  type="text"
+                  value={directAddress}
+                  onChange={e => setDirectAddress(e.target.value)}
+                  placeholder="e.g. 123 Main St, Bandra West"
+                />
+              </div>
+
+              <div className="form-actions-row mt-4">
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={() => setShowDirectAddForm(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={directSubmitting}
+                >
+                  <Plus size={16} />
+                  <span>{directSubmitting ? 'Adding...' : 'Add to Roster'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         )}
 
@@ -480,22 +666,16 @@ const ProjectDiscovery = () => {
               New Candidates ({counts.new})
             </button>
             <button
-              className={`tab-btn ${statusFilter === 'SELECTED' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('SELECTED')}
+              className={`tab-btn ${statusFilter === 'ADDED' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('ADDED')}
             >
-              Selected ({counts.selected})
+              Added ({counts.added})
             </button>
             <button
-              className={`tab-btn ${statusFilter === 'ALREADY_COMPETITOR' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('ALREADY_COMPETITOR')}
+              className={`tab-btn ${statusFilter === 'DECLINED' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('DECLINED')}
             >
-              In Roster ({counts.already})
-            </button>
-            <button
-              className={`tab-btn ${statusFilter === 'REJECTED' ? 'active' : ''}`}
-              onClick={() => setStatusFilter('REJECTED')}
-            >
-              Dismissed ({counts.rejected})
+              Declined ({counts.declined})
             </button>
           </div>
 
@@ -520,7 +700,7 @@ const ProjectDiscovery = () => {
         </div>
 
         {/* Quick Multi-Select Header (when NEW candidates available) */}
-        {newCandidates.length > 0 && statusFilter !== 'SELECTED' && statusFilter !== 'ALREADY_COMPETITOR' && (
+        {newCandidates.length > 0 && statusFilter !== 'ADDED' && statusFilter !== 'DECLINED' && (
           <div className="multi-select-header">
             <button
               className="select-all-btn"
@@ -615,18 +795,13 @@ const ProjectDiscovery = () => {
                     {/* Status Pill */}
                     <div className="card-status-slot">
                       {isNew && <span className="status-pill status-queued">NEW</span>}
-                      {isSelectedStatus && (
+                      {(isSelectedStatus || isRoster) && (
                         <span className="status-pill status-success">
                           <Check size={12} /> ADDED
                         </span>
                       )}
-                      {isRoster && (
-                        <span className="status-pill status-purple">
-                          IN ROSTER
-                        </span>
-                      )}
                       {cand.status === 'REJECTED' && (
-                        <span className="status-pill status-failed">DISMISSED</span>
+                        <span className="status-pill status-failed">DECLINED</span>
                       )}
                     </div>
                   </div>
@@ -691,9 +866,35 @@ const ProjectDiscovery = () => {
                       <button
                         className="btn-dismiss-candidate"
                         onClick={() => handleReject(cand.id)}
-                        title="Dismiss candidate"
+                        title="Decline candidate"
                       >
-                        <X size={14} /> Dismiss
+                        <X size={14} /> Decline
+                      </button>
+                      <button
+                        className="btn-delete-candidate-icon"
+                        onClick={() => handleDeleteCandidate(cand.id, cand.business_name)}
+                        title="Remove candidate from discovery"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  )}
+
+                  {(isSelectedStatus || isRoster) && (
+                    <div className="card-actions-row" onClick={e => e.stopPropagation()}>
+                      <button
+                        className="btn-unroster-candidate"
+                        onClick={() => handleRemoveFromRoster(cand.id, cand.business_name)}
+                        title="Remove from roster so it will not be scraped"
+                      >
+                        <Trash2 size={13} /> Remove from Roster
+                      </button>
+                      <button
+                        className="btn-delete-candidate"
+                        onClick={() => handleDeleteCandidate(cand.id, cand.business_name)}
+                        title="Permanently remove from discovery"
+                      >
+                        <X size={13} /> Delete
                       </button>
                     </div>
                   )}
@@ -701,10 +902,18 @@ const ProjectDiscovery = () => {
                   {cand.status === 'REJECTED' && (
                     <div className="card-actions-row" onClick={e => e.stopPropagation()}>
                       <button
-                        className="btn-reconsider"
+                        className="btn-select-candidate"
                         onClick={() => handleSelect(cand.id)}
+                        title="Add back to competitor roster"
                       >
-                        + Reconsider & Add
+                        <Plus size={14} /> Add to Roster
+                      </button>
+                      <button
+                        className="btn-delete-candidate"
+                        onClick={() => handleDeleteCandidate(cand.id, cand.business_name)}
+                        title="Permanently remove from discovery"
+                      >
+                        <Trash2 size={13} /> Delete
                       </button>
                     </div>
                   )}
@@ -738,7 +947,15 @@ const ProjectDiscovery = () => {
                 disabled={bulkSubmitting}
               >
                 <X size={15} />
-                <span>Dismiss</span>
+                <span>Decline Selected</span>
+              </button>
+              <button
+                className="bulk-btn-delete"
+                onClick={handleBulkDelete}
+                disabled={bulkSubmitting}
+              >
+                <Trash2 size={14} />
+                <span>Delete</span>
               </button>
               <button
                 className="bulk-cancel-btn"

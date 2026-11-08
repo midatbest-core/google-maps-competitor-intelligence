@@ -350,13 +350,83 @@ class DiscoveryService:
         )
         
         pc = self.db.query(ProjectCompetitor).filter_by(project_id=project_id, business_id=bp.id).first()
-        if pc:
-            return pc
-            
-        pc = ProjectCompetitor(project_id=project_id, business_id=bp.id)
-        self.db.add(pc)
+        if not pc:
+            pc = ProjectCompetitor(project_id=project_id, business_id=bp.id)
+            self.db.add(pc)
+
+        # Mark matching discovery candidates as ALREADY_COMPETITOR
+        cands = self.db.query(DiscoveryCandidate).join(DiscoveryRun).filter(
+            DiscoveryRun.project_id == project_id,
+            (
+                ((DiscoveryCandidate.source_identifier != None) & (DiscoveryCandidate.source_identifier == bp.canonical_source_id))
+                | (DiscoveryCandidate.business_name.ilike(bp.business_name))
+            )
+        ).all()
+        for cand in cands:
+            cand.status = "ALREADY_COMPETITOR"
+
         self.db.commit()
         return pc
+
+    def unselect_candidate(self, project_id: str, candidate_id: str) -> DiscoveryCandidate:
+        self._verify_project(project_id)
+        cand = self.db.query(DiscoveryCandidate).join(DiscoveryRun).filter(
+            DiscoveryCandidate.id == candidate_id,
+            DiscoveryRun.project_id == project_id
+        ).first()
+
+        if not cand:
+            raise ValueError("Candidate not found or does not belong to project")
+
+        # Find matching business profile
+        bp = None
+        if cand.source_identifier:
+            bp = self.db.query(BusinessProfile).filter_by(canonical_source_id=cand.source_identifier).first()
+        if not bp and cand.source_url:
+            bp = self.db.query(BusinessProfile).filter_by(google_maps_url=cand.source_url).first()
+        if not bp and cand.business_name:
+            bp = self.db.query(BusinessProfile).filter(BusinessProfile.business_name.ilike(cand.business_name)).first()
+
+        if bp:
+            pc = self.db.query(ProjectCompetitor).filter_by(project_id=project_id, business_id=bp.id).first()
+            if pc:
+                self.db.delete(pc)
+
+        cand.status = "NEW"
+        self.db.commit()
+        self.db.refresh(cand)
+        return cand
+
+    def delete_candidate(self, project_id: str, candidate_id: str) -> bool:
+        self._verify_project(project_id)
+        cand = self.db.query(DiscoveryCandidate).join(DiscoveryRun).filter(
+            DiscoveryCandidate.id == candidate_id,
+            DiscoveryRun.project_id == project_id
+        ).first()
+
+        if not cand:
+            raise ValueError("Candidate not found or does not belong to project")
+
+        self.db.delete(cand)
+        self.db.commit()
+        return True
+
+    def bulk_delete_candidates(self, project_id: str, candidate_ids: List[str]) -> int:
+        self._verify_project(project_id)
+        deleted_count = 0
+        for cid in candidate_ids:
+            try:
+                cand = self.db.query(DiscoveryCandidate).join(DiscoveryRun).filter(
+                    DiscoveryCandidate.id == cid,
+                    DiscoveryRun.project_id == project_id
+                ).first()
+                if cand:
+                    self.db.delete(cand)
+                    deleted_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to delete candidate {cid}: {e}")
+        self.db.commit()
+        return deleted_count
         
     def resume_discovery(self, project_id: str, run_id: str) -> DiscoveryRun:
         self._verify_project(project_id)

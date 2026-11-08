@@ -119,6 +119,13 @@ def get_competitors(project_id: str, service: ProjectService = Depends(get_proje
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+@project_router.delete("/{project_id}/competitors/{competitor_id}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_competitor(project_id: str, competitor_id: str, service: ProjectService = Depends(get_project_service)):
+    try:
+        service.remove_competitor(project_id, competitor_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
 @project_router.post("/{project_id}/scrape", response_model=ScrapeRunResponse, status_code=status.HTTP_202_ACCEPTED)
 async def start_scrape(project_id: str, background_tasks: BackgroundTasks, service: ScrapeService = Depends(get_scrape_service)):
     try:

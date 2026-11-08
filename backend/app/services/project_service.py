@@ -8,7 +8,7 @@ from app.models.profile import BusinessProfile
 from app.models.competitor import ProjectCompetitor
 from app.models.auth import Workspace
 from app.models.scrape import ScrapeRun
-from app.models.discovery import DiscoveryRun
+from app.models.discovery import DiscoveryRun, DiscoveryCandidate
 from app.models.analysis import GeneratedContent
 from app.models.post import Post
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectSummaryResponse
@@ -122,3 +122,38 @@ class ProjectService:
     def get_competitors(self, project_id: str) -> list[ProjectCompetitor]:
         self._verify_project(project_id)
         return self.project_repo.get_competitors(project_id)
+
+    def remove_competitor(self, project_id: str, competitor_id: str) -> bool:
+        self._verify_project(project_id)
+        comp = self.db.query(ProjectCompetitor).filter(
+            ProjectCompetitor.project_id == project_id,
+            (ProjectCompetitor.id == competitor_id) | (ProjectCompetitor.business_id == competitor_id)
+        ).first()
+        if not comp:
+            raise ValueError("Competitor not found in this project")
+
+        business_id = comp.business_id
+        bp = self.db.query(BusinessProfile).filter_by(id=business_id).first()
+
+        # If project's own_business_id is this business, clear it
+        project = self.db.query(Project).filter_by(id=project_id).first()
+        if project and project.own_business_id == business_id:
+            project.own_business_id = None
+
+        self.db.delete(comp)
+
+        # Reset any matching discovery candidates back to NEW
+        if bp:
+            cands = self.db.query(DiscoveryCandidate).join(DiscoveryRun).filter(
+                DiscoveryRun.project_id == project_id,
+                (
+                    ((DiscoveryCandidate.source_identifier != None) & (DiscoveryCandidate.source_identifier == bp.canonical_source_id))
+                    | (DiscoveryCandidate.business_name.ilike(bp.business_name))
+                )
+            ).all()
+            for cand in cands:
+                if cand.status in ("ALREADY_COMPETITOR", "SELECTED"):
+                    cand.status = "NEW"
+
+        self.db.commit()
+        return True

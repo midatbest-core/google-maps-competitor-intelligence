@@ -92,6 +92,29 @@ def reject_candidate(project_id: str, candidate_id: str, service: DiscoveryServi
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+@discovery_router.post("/projects/{project_id}/discovery-candidates/{candidate_id}/unselect", response_model=DiscoveryCandidateResponse)
+def unselect_candidate(project_id: str, candidate_id: str, service: DiscoveryService = Depends(get_discovery_service)):
+    try:
+        cand = service.unselect_candidate(project_id, candidate_id)
+        return cand
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@discovery_router.delete("/projects/{project_id}/discovery-candidates/{candidate_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_candidate(project_id: str, candidate_id: str, service: DiscoveryService = Depends(get_discovery_service)):
+    try:
+        service.delete_candidate(project_id, candidate_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@discovery_router.post("/projects/{project_id}/discovery-candidates/bulk-delete")
+def bulk_delete_candidates(project_id: str, payload: BulkCandidateAction, service: DiscoveryService = Depends(get_discovery_service)):
+    try:
+        deleted = service.bulk_delete_candidates(project_id, payload.candidate_ids)
+        return {"deleted": deleted}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @discovery_router.post("/projects/{project_id}/competitors/direct", response_model=CompetitorResponse)
 def add_direct_competitor(project_id: str, payload: DirectCompetitorCreate, service: DiscoveryService = Depends(get_discovery_service)):
     try:
