@@ -1,43 +1,74 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
-import { getScrapeRuns, startScrape, getScrapeRun, resumeScrapeRun, deleteScrapeRun } from '../api';
-import type { ScrapeRun, ScrapeRunCompetitor } from '../api';
+import { useToast } from '../context/ToastContext';
+import {
+  getScrapeRuns,
+  startScrape,
+  getScrapeRun,
+  resumeScrapeRun,
+  deleteScrapeRun,
+  getProjectCompetitors,
+} from '../api';
+import type { ScrapeRun, ScrapeRunCompetitor, Competitor } from '../api';
+import {
+  Database,
+  Play,
+  RefreshCw,
+  Trash2,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  ArrowRight,
+  FileText,
+  MessageSquareHeart,
+  Sparkles,
+  Info,
+  ShieldAlert,
+  Users
+} from 'lucide-react';
 import './ProjectScraping.css';
 
-const STATUS_LABELS: Record<string, string> = {
-  QUEUED: 'Queued',
-  RUNNING: 'Running',
-  RETRYING: 'Retrying',
-  PAUSED_MANUAL_INTERVENTION: 'Manual Intervention Required',
-  PARTIAL_SUCCESS: 'Partial Success',
-  SUCCESS: 'Success',
-  FAILED: 'Failed',
-  CANCELLED: 'Cancelled',
-  PENDING: 'Pending',
-  NO_DATA: 'No Data',
-  VERIFICATION_REQUIRED: 'Verification Required',
-  ERROR: 'Error'
+const STATUS_CONFIG: Record<string, { label: string; pillClass: string; icon: string }> = {
+  QUEUED: { label: 'Queued', pillClass: 'status-queued', icon: 'queued' },
+  RUNNING: { label: 'Scraping Active', pillClass: 'status-running', icon: 'running' },
+  RETRYING: { label: 'Retrying', pillClass: 'status-warning', icon: 'running' },
+  PAUSED_MANUAL_INTERVENTION: { label: 'Action Required', pillClass: 'status-warning', icon: 'warning' },
+  PARTIAL_SUCCESS: { label: 'Partial Success', pillClass: 'status-warning', icon: 'success' },
+  SUCCESS: { label: 'Completed', pillClass: 'status-success', icon: 'success' },
+  FAILED: { label: 'Failed', pillClass: 'status-failed', icon: 'failed' },
+  CANCELLED: { label: 'Cancelled', pillClass: 'status-queued', icon: 'failed' },
+  PENDING: { label: 'Pending', pillClass: 'status-queued', icon: 'queued' },
+  NO_DATA: { label: 'No Posts Found', pillClass: 'status-queued', icon: 'queued' },
+  VERIFICATION_REQUIRED: { label: 'Verification Needed', pillClass: 'status-warning', icon: 'warning' },
+  ERROR: { label: 'Error', pillClass: 'status-failed', icon: 'failed' },
 };
 
 const ProjectScraping: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
+  const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const [runs, setRuns] = useState<ScrapeRun[]>([]);
+  const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [activeRunDetails, setActiveRunDetails] = useState<ScrapeRun | null>(null);
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [resuming, setResuming] = useState(false);
 
   const pollTimerRef = useRef<number | null>(null);
 
-
-  const fetchRuns = async () => {
+  const loadData = async () => {
     try {
-      const runsRes = await getScrapeRuns(projectId!);
+      setLoading(true);
+      const [runsRes, compRes] = await Promise.all([
+        getScrapeRuns(projectId!),
+        getProjectCompetitors(projectId!),
+      ]);
+
+      setCompetitors(compRes.data);
 
       const sortedRuns = runsRes.data.sort((a, b) => {
         if (a.start_time && b.start_time) {
@@ -47,35 +78,32 @@ const ProjectScraping: React.FC = () => {
       });
       setRuns(sortedRuns);
 
-      const active = sortedRuns.find(r => ['QUEUED', 'RUNNING', 'RETRYING', 'PAUSED_MANUAL_INTERVENTION'].includes(r.status));
+      const active = sortedRuns.find(r =>
+        ['QUEUED', 'RUNNING', 'RETRYING', 'PAUSED_MANUAL_INTERVENTION'].includes(r.status)
+      );
       if (active) {
-        if (!activeRunId) {
-          setActiveRunId(active.id);
-        }
-      } else if (!activeRunId && sortedRuns.length > 0) {
+        setActiveRunId(active.id);
+      } else if (sortedRuns.length > 0 && !activeRunId) {
         setActiveRunId(sortedRuns[0].id);
       }
     } catch (err: any) {
       console.error(err);
-      setError('Failed to load scrape runs');
+      showToast('Failed to load scrape runs', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-
-  const fetchActiveRunDetails = async () => {
-    if (!activeRunId) return;
+  const fetchActiveRunDetails = async (runId: string) => {
     try {
-      const res = await getScrapeRun(activeRunId);
+      const res = await getScrapeRun(runId);
       setActiveRunDetails(res.data);
 
-      // Stop polling if run is completed
       if (['SUCCESS', 'PARTIAL_SUCCESS', 'FAILED', 'CANCELLED'].includes(res.data.status)) {
         stopPolling();
-      } else if (res.data.status === 'PAUSED_MANUAL_INTERVENTION') {
-        // We can slow down polling or stop, let's stop for now to prevent spam
-        stopPolling();
+        if (res.data.status === 'SUCCESS') {
+          showToast('Scraping run completed successfully!', 'success');
+        }
       }
     } catch (err) {
       console.error('Failed to load run details', err);
@@ -84,10 +112,25 @@ const ProjectScraping: React.FC = () => {
 
   const startPolling = () => {
     if (pollTimerRef.current) return;
-    pollTimerRef.current = window.setInterval(() => {
-      fetchActiveRunDetails();
-      fetchRuns();
-    }, 4000);
+    pollTimerRef.current = window.setInterval(async () => {
+      if (!projectId) return;
+      try {
+        const runsRes = await getScrapeRuns(projectId);
+        const sorted = runsRes.data.sort((a, b) => {
+          if (a.start_time && b.start_time) {
+            return new Date(b.start_time).getTime() - new Date(a.start_time).getTime();
+          }
+          return b.id.localeCompare(a.id);
+        });
+        setRuns(sorted);
+
+        if (activeRunId) {
+          await fetchActiveRunDetails(activeRunId);
+        }
+      } catch (e) {
+        console.error('Polling error', e);
+      }
+    }, 2800);
   };
 
   const stopPolling = () => {
@@ -99,16 +142,15 @@ const ProjectScraping: React.FC = () => {
 
   useEffect(() => {
     if (projectId) {
-      fetchRuns();
+      loadData();
     }
     return () => stopPolling();
   }, [projectId]);
 
   useEffect(() => {
     if (activeRunId) {
-      fetchActiveRunDetails();
+      fetchActiveRunDetails(activeRunId);
 
-      // If we select a run that is active, start polling
       const run = runs.find(r => r.id === activeRunId);
       if (run && ['QUEUED', 'RUNNING', 'RETRYING'].includes(run.status)) {
         startPolling();
@@ -120,240 +162,361 @@ const ProjectScraping: React.FC = () => {
 
   const handleStartScrape = async () => {
     if (!projectId) return;
+    if (competitors.length === 0) {
+      showToast('Add competitors on the Discovery or Competitors page before scraping.', 'warning');
+      return;
+    }
+
     setStarting(true);
-    setError(null);
     try {
       const res = await startScrape(projectId);
-      await fetchRuns();
+      showToast(`Scrape pipeline started for ${competitors.length} competitors!`, 'info');
       setActiveRunId(res.data.id);
+      await loadData();
+      startPolling();
     } catch (err: any) {
-      console.error(err);
-      if (err.response?.data?.detail) {
-        setError(`Cannot start scrape: ${err.response.data.detail}`);
-      } else {
-        setError('Failed to start scrape');
-      }
-      await fetchRuns(); // Refresh in case the backend failed stale runs
+      const msg = err.response?.data?.detail || 'Failed to start scrape run';
+      showToast(msg, 'error');
+      await loadData();
     } finally {
       setStarting(false);
     }
   };
 
-  const handleDeleteRun = async (e: React.MouseEvent, runId: string, status: string) => {
-    e.stopPropagation(); // prevent active run change
-    if (['QUEUED', 'RUNNING', 'RETRYING', 'STARTED'].includes(status)) {
-      if (!window.confirm(`This run is marked as ${status}. Are you sure it's stale and you want to delete it?`)) {
-        return;
-      }
-    } else {
-      if (!window.confirm('Delete this scrape run? Post data will be kept.')) return;
-    }
+  const handleDeleteRun = async (e: React.MouseEvent, runId: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Delete this scrape run? Scraped posts and reviews will be preserved.')) return;
 
     try {
       await deleteScrapeRun(projectId!, runId);
+      showToast('Scrape run deleted.', 'info');
       if (activeRunId === runId) {
         setActiveRunId(null);
         setActiveRunDetails(null);
       }
-      await fetchRuns();
+      await loadData();
     } catch (err: any) {
-      console.error(err);
-      setError(err.response?.data?.detail || 'Failed to delete run');
+      showToast(err.response?.data?.detail || 'Failed to delete run', 'error');
     }
   };
 
   const handleResumeRun = async () => {
     if (!activeRunId) return;
     setResuming(true);
-    setError(null);
     try {
       await resumeScrapeRun(activeRunId);
-      await fetchActiveRunDetails();
-      await fetchRuns();
+      showToast('Resuming scrape run...', 'info');
+      await fetchActiveRunDetails(activeRunId);
+      await loadData();
       startPolling();
     } catch (err: any) {
-      console.error(err);
-      setError(err.response?.data?.detail || 'Failed to resume run');
+      showToast(err.response?.data?.detail || 'Failed to resume run', 'error');
     } finally {
       setResuming(false);
     }
   };
 
   const renderStatusBadge = (status: string) => {
-    const s = status.toUpperCase();
-    let badgeClass = 'status-default';
-    if (['SUCCESS'].includes(s)) badgeClass = 'status-success';
-    if (['FAILED', 'ERROR', 'CANCELLED'].includes(s)) badgeClass = 'status-error';
-    if (['RUNNING', 'RETRYING'].includes(s)) badgeClass = 'status-running';
-    if (['QUEUED', 'PENDING'].includes(s)) badgeClass = 'status-warning';
-    if (['PARTIAL_SUCCESS'].includes(s)) badgeClass = 'status-partial';
-    if (['PAUSED_MANUAL_INTERVENTION', 'VERIFICATION_REQUIRED'].includes(s)) badgeClass = 'status-manual';
+    const config = STATUS_CONFIG[status.toUpperCase()] || {
+      label: status,
+      pillClass: 'status-queued',
+      icon: 'queued',
+    };
 
-    return <span className={`status-badge ${badgeClass}`}>{STATUS_LABELS[status] || status}</span>;
+    return (
+      <span className={`status-pill ${config.pillClass}`}>
+        {config.icon === 'running' && <span className="pulse-dot running"></span>}
+        {config.icon === 'success' && <CheckCircle2 size={12} />}
+        {config.icon === 'failed' && <AlertCircle size={12} />}
+        {config.label}
+      </span>
+    );
   };
 
-  if (loading) {
-    return (
-      <AppLayout projectId={projectId}>
-        <div className="scraping-page loading-state">
-          <p>Loading scrape runs...</p>
-        </div>
-      </AppLayout>
-    );
-  }
+  const activeRun = runs.find(r => ['QUEUED', 'RUNNING', 'RETRYING'].includes(r.status));
 
   return (
     <AppLayout projectId={projectId}>
-      <div className="scraping-page">
-        <header className="page-header">
-          <div>
-            <h1>Scraping</h1>
-            <p>Monitor and manage competitor data collection.</p>
+      {/* Top Header */}
+      <header className="topbar scraping-topbar">
+        <div className="topbar-left">
+          <div className="topbar-title-row">
+            <h1>Scraping Pipeline</h1>
+            <span className="status-pill status-running">
+              <Database size={13} /> Posts & Reviews Collector
+            </span>
           </div>
+          <p className="scraping-header-subtitle">
+            Collect Google Maps posts, photos, and customer reviews for your active competitor roster.
+          </p>
+        </div>
+        <div className="topbar-actions">
           <button
-            className="btn-primary"
-            onClick={handleStartScrape}
-            disabled={starting}
+            className="secondary-btn"
+            onClick={loadData}
+            title="Refresh runs"
           >
-            {starting ? 'Starting...' : 'Start New Scrape'}
+            <RefreshCw size={15} />
+            <span>Refresh</span>
           </button>
-        </header>
+          <button
+            className="secondary-btn"
+            onClick={() => navigate(`/projects/${projectId}/competitors`)}
+          >
+            <Users size={15} />
+            <span>View Roster ({competitors.length})</span>
+          </button>
+          <button
+            className="primary-btn"
+            onClick={handleStartScrape}
+            disabled={starting || competitors.length === 0}
+          >
+            <Play size={15} />
+            <span>
+              {starting
+                ? 'Starting Pipeline...'
+                : `Start Scraping (${competitors.length} Competitors)`}
+            </span>
+          </button>
+        </div>
+      </header>
 
-        {error && <div className="error-message">{error}</div>}
+      <div className="content-area">
+        {/* Pipeline Decoupling Banner */}
+        <div className="pipeline-banner scraping">
+          <Info size={20} className="banner-icon" />
+          <div className="banner-content">
+            <strong>Data Collection Pipeline (Decoupled from Discovery):</strong> This pipeline scrapes social posts and reviews for the businesses in your <strong>Competitor Roster</strong> ({competitors.length} active). To discover and add new competitors, use the <Link to={`/projects/${projectId}/discovery`} className="banner-link">Discovery Scout page <ArrowRight size={12} /></Link>.
+          </div>
+        </div>
 
-        <div className="scraping-content">
-          <div className="scraping-sidebar">
+        {/* Live Active Scrape Banner / Card */}
+        {activeRun && (
+          <div className="active-scrape-card animate-slide-in">
+            <div className="scrape-pulse-indicator">
+              <span className="pulse-dot running"></span>
+            </div>
+            <div className="active-scrape-info">
+              <div className="active-scrape-header">
+                <span className="status-pill status-running">
+                  <span className="pulse-dot running"></span> RUNNING NOW
+                </span>
+                <span className="active-scrape-id">Run #{activeRun.id.split('-')[0]}</span>
+              </div>
+              <p className="active-scrape-desc">
+                Extracting posts and reviews for {competitors.length} competitors. Real-time updates stream below automatically.
+              </p>
+            </div>
+          </div>
+        )}
 
+        {/* Main 2-Column Content Layout */}
+        <div className="scraping-layout">
+          {/* Left Column: Recent Runs List */}
+          <div className="scraping-sidebar-col">
+            <div className="runs-sidebar-header">
+              <h3>Run History</h3>
+              <span className="runs-count-badge">{runs.length} Runs</span>
+            </div>
 
-            <h3 style={{ margin: '0 0 1rem 0', fontSize: '1rem' }}>Recent Runs</h3>
-            {runs.length === 0 ? (
-              <p className="empty-text">No scrape runs yet.</p>
+            {loading && runs.length === 0 ? (
+              <div className="runs-skeleton-list">
+                {[1, 2, 3].map(n => (
+                  <div key={n} className="run-card-skeleton skeleton" style={{ height: '90px' }} />
+                ))}
+              </div>
+            ) : runs.length === 0 ? (
+              <div className="empty-runs-box">
+                <Database size={28} className="text-dim" />
+                <h4>No Scrapes Yet</h4>
+                <p>Click "Start Scraping" above to run your first data collection.</p>
+              </div>
             ) : (
-              <div className="run-list">
-                {runs.map(run => (
-                  <div
-                    key={run.id}
-                    className={`run-list-item ${activeRunId === run.id ? 'active' : ''}`}
-                    onClick={() => setActiveRunId(run.id)}
-                  >
-                    <div className="run-list-header">
-                      <span className="run-id">{run.id.split('-')[0]}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {renderStatusBadge(run.status)}
-                        <button
-                          onClick={(e) => handleDeleteRun(e, run.id, run.status)}
-                          title="Delete Run"
-                          style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0 4px', fontSize: '14px' }}
-                        >
-                          ✕
-                        </button>
+              <div className="runs-list">
+                {runs.map(run => {
+                  const isSelected = activeRunId === run.id;
+                  const isRunActive = ['QUEUED', 'RUNNING', 'RETRYING'].includes(run.status);
+
+                  return (
+                    <div
+                      key={run.id}
+                      className={`run-card ${isSelected ? 'active' : ''} ${isRunActive ? 'is-active-run' : ''}`}
+                      onClick={() => setActiveRunId(run.id)}
+                    >
+                      <div className="run-card-top">
+                        <span className="run-card-id">#{run.id.split('-')[0]}</span>
+                        <div className="run-card-status-wrap">
+                          {renderStatusBadge(run.status)}
+                          <button
+                            className="delete-run-btn"
+                            onClick={e => handleDeleteRun(e, run.id)}
+                            title="Delete run"
+                            aria-label="Delete run"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="run-card-meta">
+                        <Clock size={12} />
+                        <span>
+                          {run.start_time
+                            ? new Date(run.start_time).toLocaleString(undefined, {
+                                dateStyle: 'short',
+                                timeStyle: 'short',
+                              })
+                            : 'Not started'}
+                        </span>
+                      </div>
+
+                      <div className="run-card-metrics">
+                        <span>
+                          <strong>{run.competitors_succeeded}</strong> / {run.competitors_attempted} Competitors
+                        </span>
                       </div>
                     </div>
-                    <div className="run-list-meta">
-                      {run.start_time ? new Date(run.start_time).toLocaleString() : 'Not started'}
-                    </div>
-                    <div className="run-list-stats">
-                      {run.competitors_succeeded} / {run.competitors_attempted} succeeded
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
 
-          <div className="scraping-main">
+          {/* Right Column: Run Details & Competitor Breakdown */}
+          <div className="scraping-details-col">
             {activeRunDetails ? (
-              <div className="run-details-panel">
-                <div className="run-details-header">
-                  <h2>Run {activeRunDetails.id}</h2>
-                  {renderStatusBadge(activeRunDetails.status)}
+              <div className="run-details-card">
+                <div className="run-details-top">
+                  <div>
+                    <span className="details-subtitle">Scrape Run Inspection</span>
+                    <h2>Run #{activeRunDetails.id}</h2>
+                  </div>
+                  <div>{renderStatusBadge(activeRunDetails.status)}</div>
                 </div>
 
+                {/* Manual Intervention Banner */}
                 {activeRunDetails.status === 'PAUSED_MANUAL_INTERVENTION' && (
-                  <div className="manual-intervention-alert">
-                    <h4>Manual verification required</h4>
-                    <p>The scraper has paused because manual verification is required. Complete verification in the configured browser/session, then resume the run.</p>
-                    <button className="btn-warning" onClick={handleResumeRun} disabled={resuming}>
-                      {resuming ? 'Resuming...' : 'Resume Run'}
-                    </button>
+                  <div className="manual-intervention-box animate-slide-in">
+                    <ShieldAlert size={22} className="text-warning" />
+                    <div className="intervention-text">
+                      <h4>Manual Verification Triggered</h4>
+                      <p>
+                        A captcha or verification checkpoint was encountered. Complete verification in the visible browser session, then click resume.
+                      </p>
+                      <button
+                        className="btn-warning"
+                        onClick={handleResumeRun}
+                        disabled={resuming}
+                      >
+                        {resuming ? 'Resuming...' : 'Resume Scrape Run'}
+                      </button>
+                    </div>
                   </div>
                 )}
 
-                <div className="stats-grid">
-                  <div className="stat-card">
-                    <span className="stat-label">Total Attempted</span>
-                    <span className="stat-value">{activeRunDetails.competitors_attempted}</span>
+                {/* Metrics Stats Row */}
+                <div className="metrics-summary-grid">
+                  <div className="metric-box">
+                    <span className="metric-label">Competitors Attempted</span>
+                    <span className="metric-val">{activeRunDetails.competitors_attempted}</span>
                   </div>
-                  <div className="stat-card">
-                    <span className="stat-label">Succeeded</span>
-                    <span className="stat-value text-success">{activeRunDetails.competitors_succeeded}</span>
+                  <div className="metric-box">
+                    <span className="metric-label">Succeeded</span>
+                    <span className="metric-val text-success">
+                      {activeRunDetails.competitors_succeeded}
+                    </span>
                   </div>
-                  <div className="stat-card">
-                    <span className="stat-label">Failed</span>
-                    <span className="stat-value text-error">{activeRunDetails.competitors_failed}</span>
+                  <div className="metric-box">
+                    <span className="metric-label">Failed / Stalled</span>
+                    <span className="metric-val text-error">
+                      {activeRunDetails.competitors_failed}
+                    </span>
                   </div>
-                  <div className="stat-card">
-                    <span className="stat-label">Started</span>
-                    <span className="stat-value small-text">
-                      {activeRunDetails.start_time ? new Date(activeRunDetails.start_time).toLocaleString() : 'N/A'}
+                  <div className="metric-box">
+                    <span className="metric-label">Pipeline Started</span>
+                    <span className="metric-val small">
+                      {activeRunDetails.start_time
+                        ? new Date(activeRunDetails.start_time).toLocaleTimeString()
+                        : 'N/A'}
                     </span>
                   </div>
                 </div>
 
+                {/* Quick Navigation into Extracted Data */}
                 {['SUCCESS', 'PARTIAL_SUCCESS'].includes(activeRunDetails.status) && (
-                  <div style={{ display: 'flex', gap: '12px', marginTop: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
-                    <Link to={`/projects/${projectId}/posts`} className="btn-secondary" style={{ textDecoration: 'none' }}>
-                      View Extracted Posts →
+                  <div className="quick-intel-actions">
+                    <Link
+                      to={`/projects/${projectId}/posts`}
+                      className="secondary-btn"
+                    >
+                      <FileText size={15} />
+                      <span>View Posts</span>
                     </Link>
-                    <Link to={`/projects/${projectId}/reviews`} className="btn-secondary" style={{ textDecoration: 'none' }}>
-                      View Customer Reviews →
+                    <Link
+                      to={`/projects/${projectId}/reviews`}
+                      className="secondary-btn"
+                    >
+                      <MessageSquareHeart size={15} />
+                      <span>View Reviews</span>
                     </Link>
-                    <Link to={`/projects/${projectId}/intelligence`} className="btn-primary" style={{ textDecoration: 'none' }}>
-                      ⚡ Synthesize Combined Intelligence →
+                    <Link
+                      to={`/projects/${projectId}/intelligence`}
+                      className="primary-btn"
+                    >
+                      <Sparkles size={15} />
+                      <span>Synthesize Combined Intel</span>
                     </Link>
                   </div>
                 )}
 
-                <div className="competitors-section">
-                  <h3>Competitor Results</h3>
-                  {(!activeRunDetails.competitor_runs || activeRunDetails.competitor_runs.length === 0) ? (
-                    <p className="empty-text">No competitor details available.</p>
+                {/* Competitor Scrape Results Table */}
+                <div className="competitor-results-section">
+                  <div className="section-header-row">
+                    <h3>Competitor Scrape Results</h3>
+                    <span className="results-count">
+                      {activeRunDetails.competitor_runs?.length || 0} Businesses
+                    </span>
+                  </div>
+
+                  {!activeRunDetails.competitor_runs || activeRunDetails.competitor_runs.length === 0 ? (
+                    <p className="no-competitors-text">No competitor details recorded for this run.</p>
                   ) : (
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Business</th>
-                          <th>Status</th>
-                          <th>New Posts</th>
-                          <th>Total Found</th>
-                          <th>Error</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {activeRunDetails.competitor_runs.map((cr: ScrapeRunCompetitor) => (
-                          <tr key={cr.id}>
-                            <td>{cr.business?.business_name || 'Unknown Business'}</td>
-                            <td>{renderStatusBadge(cr.status)}</td>
-                            <td>{cr.new_posts}</td>
-                            <td>{cr.posts_discovered}</td>
-                            <td className="error-cell">{cr.error_message || '-'}</td>
+                    <div className="table-responsive-wrapper">
+                      <table className="modern-table">
+                        <thead>
+                          <tr>
+                            <th>Business Name</th>
+                            <th>Status</th>
+                            <th>New Posts</th>
+                            <th>Total Found</th>
+                            <th>Status Notes / Error</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {activeRunDetails.competitor_runs.map((cr: ScrapeRunCompetitor) => (
+                            <tr key={cr.id}>
+                              <td className="business-cell">
+                                <strong>{cr.business?.business_name || 'Unknown Business'}</strong>
+                              </td>
+                              <td>{renderStatusBadge(cr.status)}</td>
+                              <td>
+                                <span className="stat-highlight">{cr.new_posts}</span>
+                              </td>
+                              <td>{cr.posts_discovered}</td>
+                              <td className="note-cell">{cr.error_message || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="empty-state">
-                {runs.length === 0 ? (
-                  <div className="empty-message">
-                    <h3>No Active Scrape</h3>
-                    <p>Start your first scrape to collect competitor updates.</p>
-                  </div>
-                ) : (
-                  <p>Select a run to view details.</p>
-                )}
+              <div className="select-run-placeholder">
+                <Database size={36} className="text-dim" />
+                <h3>Select a Scrape Run</h3>
+                <p>Click on any run from the history sidebar to view competitor performance and extracted metrics.</p>
               </div>
             )}
           </div>

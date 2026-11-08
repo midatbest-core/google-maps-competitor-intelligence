@@ -2,6 +2,17 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { getProjectSummary } from '../api';
+import {
+  Compass,
+  Users,
+  Database,
+  FileText,
+  MessageSquareHeart,
+  Sparkles,
+  Target,
+  Wand2,
+  RefreshCw
+} from 'lucide-react';
 import './Dashboard.css';
 
 interface ProjectSummary {
@@ -46,7 +57,9 @@ const ProjectDashboard = () => {
   if (loading) {
     return (
       <AppLayout projectId={projectId}>
-        <div className="state-message">Loading project dashboard...</div>
+        <div className="content-area">
+          <div className="state-message">Loading project command center...</div>
+        </div>
       </AppLayout>
     );
   }
@@ -54,88 +67,217 @@ const ProjectDashboard = () => {
   if (error || !summary) {
     return (
       <AppLayout projectId={projectId}>
-        <div className="state-message error">{error || 'Project not found'}</div>
+        <div className="content-area">
+          <div className="error-banner">{error || 'Project not found'}</div>
+        </div>
       </AppLayout>
     );
   }
 
   return (
-    <AppLayout projectId={projectId}>
-      <header className="topbar">
+    <AppLayout projectId={projectId} projectName={summary.project.name}>
+      {/* Top Header */}
+      <header className="topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1>{summary.project.name}</h1>
-          {summary.project.description && (
-            <p style={{ color: '#94a3b8', fontSize: '15px', marginTop: '4px' }}>
-              {summary.project.description}
-            </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h1>{summary.project.name}</h1>
+            <span className="status-pill status-purple">Active Project</span>
+          </div>
+          {summary.project.description ? (
+            <p className="discovery-header-subtitle">{summary.project.description}</p>
+          ) : (
+            <p className="discovery-header-subtitle">Google Maps Competitor Intelligence & Studio</p>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <Link to={`/projects/${projectId}/scraping`} className="btn-secondary" style={{ textDecoration: 'none' }}>
-            Run Scraper
+
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <button className="secondary-btn" onClick={() => loadSummary(projectId!)}>
+            <RefreshCw size={15} />
+            <span>Refresh</span>
+          </button>
+          <Link to={`/projects/${projectId}/discovery`} className="secondary-btn">
+            <Compass size={15} />
+            <span>Discovery Scout</span>
           </Link>
-          <Link to={`/projects/${projectId}/intelligence`} className="btn-primary" style={{ textDecoration: 'none' }}>
-            View Intelligence
+          <Link to={`/projects/${projectId}/scraping`} className="primary-btn">
+            <Database size={15} />
+            <span>Scraping Pipeline</span>
           </Link>
         </div>
       </header>
 
       <div className="content-area">
-        <div className="stats-grid mt-6">
-          <div className="stat-card">
-            <h3>Competitors Monitored</h3>
-            <div className="stat-value">{summary.competitor_count}</div>
+        {/* Step-by-Step Guided Workflow Banner */}
+        <div className="workflow-stepper-card">
+          <div className="workflow-stepper-header">
+            <span className="stepper-title">COMPETITIVE INTELLIGENCE JOURNEY</span>
+            <span className="stepper-sub">4-Step Automated Intelligence Pipeline</span>
           </div>
-          <div className="stat-card">
-            <h3>Posts Synthesized</h3>
-            <div className="stat-value">{summary.post_count}</div>
-          </div>
-          <div className="stat-card">
-            <h3>Reviews Collected</h3>
-            <div className="stat-value" style={{ color: '#a855f7' }}>{summary.review_count || 0}</div>
-          </div>
-          <div className="stat-card">
-            <h3>Content Generated</h3>
-            <div className="stat-value">{summary.generated_content_count}</div>
-          </div>
-          <div className="stat-card">
-            <h3>Latest Scrape Status</h3>
-            <div className="stat-value" style={{ fontSize: '16px', marginTop: '16px', color: summary.latest_scrape_status === 'SUCCESS' ? '#34d399' : '#94a3b8' }}>
-              {summary.latest_scrape ? summary.latest_scrape_status : 'Never Run'}
-            </div>
+          <div className="workflow-steps-grid">
+            <Link to={`/projects/${projectId}/discovery`} className="workflow-step-box">
+              <div className="step-num-badge">1</div>
+              <div className="step-content">
+                <strong>Scout Competitors</strong>
+                <span>Search Google Maps by km radius</span>
+              </div>
+            </Link>
+
+            <Link to={`/projects/${projectId}/competitors`} className="workflow-step-box">
+              <div className="step-num-badge">2</div>
+              <div className="step-content">
+                <strong>Confirm Roster</strong>
+                <span>Set your business & competitors</span>
+              </div>
+            </Link>
+
+            <Link to={`/projects/${projectId}/scraping`} className="workflow-step-box">
+              <div className="step-num-badge">3</div>
+              <div className="step-content">
+                <strong>Scrape Data</strong>
+                <span>Collect posts & customer reviews</span>
+              </div>
+            </Link>
+
+            <Link to={`/projects/${projectId}/strategy`} className="workflow-step-box">
+              <div className="step-num-badge">4</div>
+              <div className="step-content">
+                <strong>Synthesize & Create</strong>
+                <span>Identify gaps & generate content</span>
+              </div>
+            </Link>
           </div>
         </div>
 
-        <h2 className="section-title mt-6" style={{ marginTop: '48px' }}>Project Intelligence Modules</h2>
-        <div className="projects-grid mt-4">
-          <Link to={`/projects/${projectId}/intelligence`} className="project-card" style={{ textDecoration: 'none', borderLeft: '4px solid #3b82f6' }}>
-            <h3 style={{ color: '#60a5fa' }}>Combined Intelligence Engine</h3>
-            <p>Connect competitor marketing promises with real customer reviews to reveal strategic disconnects and high-leverage opportunities.</p>
+        {/* High Level Key Metrics */}
+        <div className="stats-grid mt-6">
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <Users size={18} className="text-primary" />
+              <span className="stat-label">Competitors Roster</span>
+            </div>
+            <div className="stat-value">{summary.competitor_count}</div>
+            <span className="stat-foot">Tracked businesses</span>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <FileText size={18} style={{ color: '#38bdf8' }} />
+              <span className="stat-label">Business Posts</span>
+            </div>
+            <div className="stat-value" style={{ color: '#38bdf8' }}>{summary.post_count}</div>
+            <span className="stat-foot">Scraped & analyzed updates</span>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <MessageSquareHeart size={18} style={{ color: '#a855f7' }} />
+              <span className="stat-label">Customer Reviews</span>
+            </div>
+            <div className="stat-value" style={{ color: '#c084fc' }}>{summary.review_count || 0}</div>
+            <span className="stat-foot">Feedback & sentiment records</span>
+          </div>
+
+          <div className="stat-card">
+            <div className="stat-card-header">
+              <Wand2 size={18} style={{ color: '#ec4899' }} />
+              <span className="stat-label">Content Generated</span>
+            </div>
+            <div className="stat-value" style={{ color: '#f472b6' }}>{summary.generated_content_count}</div>
+            <span className="stat-foot">Marketing campaign drafts</span>
+          </div>
+        </div>
+
+        {/* Feature Modules Grid */}
+        <div className="section-title-wrap" style={{ marginTop: '40px', marginBottom: '20px' }}>
+          <h2 style={{ fontSize: '20px', margin: 0 }}>Project Intelligence Modules</h2>
+          <p style={{ color: '#94a3b8', fontSize: '13.5px', margin: '4px 0 0' }}>
+            Jump into specialized intelligence, analytics, and content generation workspaces.
+          </p>
+        </div>
+
+        <div className="projects-grid">
+          <Link to={`/projects/${projectId}/discovery`} className="module-card">
+            <div className="module-card-icon" style={{ background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8' }}>
+              <Compass size={22} />
+            </div>
+            <div className="module-card-body">
+              <div className="module-card-title-row">
+                <h3>Discovery Scout</h3>
+                <span className="status-pill status-purple">SCOUT</span>
+              </div>
+              <p>Search Google Maps by range in kilometers, inspect ratings, and add candidates directly to your roster.</p>
+              <span className="module-link-arrow">Open Scout &rarr;</span>
+            </div>
           </Link>
 
-          <Link to={`/projects/${projectId}/competitors`} className="project-card" style={{ textDecoration: 'none', borderLeft: '4px solid #10b981' }}>
-            <h3 style={{ color: '#34d399' }}>Competitors & Discovery</h3>
-            <p>Track direct competitors, resolve canonical Google Maps IDs, and discover emerging local businesses.</p>
+          <Link to={`/projects/${projectId}/scraping`} className="module-card">
+            <div className="module-card-icon" style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8' }}>
+              <Database size={22} />
+            </div>
+            <div className="module-card-body">
+              <div className="module-card-title-row">
+                <h3>Scraping Pipeline</h3>
+                <span className="status-pill status-running">DATA</span>
+              </div>
+              <p>Run automated scrapers for all tracked competitors to extract both promotional posts and customer reviews.</p>
+              <span className="module-link-arrow">Open Pipeline &rarr;</span>
+            </div>
           </Link>
 
-          <Link to={`/projects/${projectId}/reviews`} className="project-card" style={{ textDecoration: 'none', borderLeft: '4px solid #a855f7' }}>
-            <h3 style={{ color: '#c084fc' }}>Customer Reviews Feed</h3>
-            <p>Filter customer complaints, satisfaction patterns, and owner responses across all monitored competitors.</p>
+          <Link to={`/projects/${projectId}/intelligence`} className="module-card">
+            <div className="module-card-icon" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#a855f7' }}>
+              <Sparkles size={22} />
+            </div>
+            <div className="module-card-body">
+              <div className="module-card-title-row">
+                <h3>Combined Intelligence</h3>
+                <span className="status-pill status-purple">AI INSIGHT</span>
+              </div>
+              <p>Compare marketing promises with authentic customer reviews to uncover market gaps and competitor vulnerabilities.</p>
+              <span className="module-link-arrow">Open Combined Intel &rarr;</span>
+            </div>
           </Link>
 
-          <Link to={`/projects/${projectId}/posts`} className="project-card" style={{ textDecoration: 'none', borderLeft: '4px solid #38bdf8' }}>
-            <h3 style={{ color: '#38bdf8' }}>Business Updates & Posts</h3>
-            <p>Analyze competitor promotional posts, CTAs, media, and posting cadence extracted via Playwright.</p>
+          <Link to={`/projects/${projectId}/strategy`} className="module-card">
+            <div className="module-card-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>
+              <Target size={22} />
+            </div>
+            <div className="module-card-body">
+              <div className="module-card-title-row">
+                <h3>Content Strategy Gaps</h3>
+                <span className="status-pill status-warning">STRATEGY</span>
+              </div>
+              <p>Detect high-leverage topic, keyword, and format gaps where competitors post frequently but you do not.</p>
+              <span className="module-link-arrow">Open Strategy &rarr;</span>
+            </div>
           </Link>
 
-          <Link to={`/projects/${projectId}/strategy`} className="project-card" style={{ textDecoration: 'none', borderLeft: '4px solid #f59e0b' }}>
-            <h3 style={{ color: '#fbbf24' }}>Content Strategy</h3>
-            <p>Detect market gaps in topics, keywords, and content formats where competitors are currently underserved.</p>
+          <Link to={`/projects/${projectId}/posts`} className="module-card">
+            <div className="module-card-icon" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#10b981' }}>
+              <FileText size={22} />
+            </div>
+            <div className="module-card-body">
+              <div className="module-card-title-row">
+                <h3>Business Posts Repository</h3>
+                <span className="status-pill status-success">POSTS</span>
+              </div>
+              <p>Inspect extracted competitor updates, captions, media links, and AI topic tags with instant search & filters.</p>
+              <span className="module-link-arrow">View Posts &rarr;</span>
+            </div>
           </Link>
 
-          <Link to={`/projects/${projectId}/generate`} className="project-card" style={{ textDecoration: 'none', borderLeft: '4px solid #ec4899' }}>
-            <h3 style={{ color: '#f472b6' }}>Content Studio</h3>
-            <p>Turn synthesized competitor intelligence and customer pain points into high-converting marketing campaigns.</p>
+          <Link to={`/projects/${projectId}/generate`} className="module-card">
+            <div className="module-card-icon" style={{ background: 'rgba(236, 72, 153, 0.15)', color: '#ec4899' }}>
+              <Wand2 size={22} />
+            </div>
+            <div className="module-card-body">
+              <div className="module-card-title-row">
+                <h3>AI Content Studio</h3>
+                <span className="status-pill status-purple">STUDIO</span>
+              </div>
+              <p>Turn market opportunities into high-converting social media posts, headlines, and campaigns using Gemini.</p>
+              <span className="module-link-arrow">Open Studio &rarr;</span>
+            </div>
           </Link>
         </div>
       </div>

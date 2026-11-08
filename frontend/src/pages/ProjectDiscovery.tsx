@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
+import { useToast } from '../context/ToastContext';
 import {
   getDiscoveryRuns,
   startDiscovery,
@@ -11,19 +12,34 @@ import {
   bulkRejectDiscoveryCandidates,
 } from '../api';
 import type { DiscoveryRun, DiscoveryCandidate } from '../api';
+import {
+  Compass,
+  Search,
+  MapPin,
+  Sliders,
+  Check,
+  X,
+  Star,
+  ExternalLink,
+  RefreshCw,
+  CheckSquare,
+  Square,
+  Users,
+  ArrowRight,
+  Info
+} from 'lucide-react';
 import './ProjectDiscovery.css';
 
 const ProjectDiscovery = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
+  const { showToast } = useToast();
 
   const [runs, setRuns] = useState<DiscoveryRun[]>([]);
   const [candidates, setCandidates] = useState<DiscoveryCandidate[]>([]);
-
-  const [loadingRuns, setLoadingRuns] = useState(true);
   const [loadingCandidates, setLoadingCandidates] = useState(false);
 
-  // Discovery Form State
+  // Form State
   const [showDiscoveryForm, setShowDiscoveryForm] = useState(false);
   const [formQuery, setFormQuery] = useState('');
   const [formLocation, setFormLocation] = useState('');
@@ -32,12 +48,17 @@ const ProjectDiscovery = () => {
   const [formSubmitting, setFormSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
 
+  // Filters & Search
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'NEW' | 'SELECTED' | 'ALREADY_COMPETITOR' | 'REJECTED'>('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+
   // Multi-selection state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkSubmitting, setBulkSubmitting] = useState(false);
-  const [actionSuccessMsg, setActionSuccessMsg] = useState<string | null>(null);
 
   const pollTimerRef = useRef<number | null>(null);
+
+  const radiusPresets = [2, 5, 10, 25, 50];
 
   useEffect(() => {
     if (projectId) {
@@ -46,7 +67,7 @@ const ProjectDiscovery = () => {
     }
   }, [projectId]);
 
-  // Polling effect for active discovery runs
+  // Real-time polling when runs are active
   useEffect(() => {
     const hasActiveRun = runs.some(r => r.status === 'QUEUED' || r.status === 'RUNNING');
     if (hasActiveRun) {
@@ -60,10 +81,15 @@ const ProjectDiscovery = () => {
             ]);
             setRuns(runsRes.data);
             setCandidates(candRes.data);
+
+            const stillActive = runsRes.data.some(r => r.status === 'QUEUED' || r.status === 'RUNNING');
+            if (!stillActive) {
+              showToast('Discovery search completed! Candidates updated.', 'success');
+            }
           } catch (e) {
             console.error('Error during discovery polling', e);
           }
-        }, 3000);
+        }, 2500);
       }
     } else {
       if (pollTimerRef.current) {
@@ -78,17 +104,14 @@ const ProjectDiscovery = () => {
         pollTimerRef.current = null;
       }
     };
-  }, [runs, projectId]);
+  }, [runs, projectId, showToast]);
 
   const loadRuns = async () => {
     try {
-      setLoadingRuns(true);
       const res = await getDiscoveryRuns(projectId!);
       setRuns(res.data);
     } catch (err: any) {
       console.error(err);
-    } finally {
-      setLoadingRuns(false);
     }
   };
 
@@ -115,20 +138,21 @@ const ProjectDiscovery = () => {
         category: formCategory.trim() || undefined,
         radius: formRadius > 0 ? formRadius : 10,
       });
+
       setShowDiscoveryForm(false);
       setFormQuery('');
       setFormLocation('');
       setFormCategory('');
-      setActionSuccessMsg(
-        `Discovery started with a ${formRadius} km radius search! Finding competitors now...`
-      );
+      showToast(`Scout search initiated across a ${formRadius} km radius!`, 'info');
+
       setRuns(prev => [res.data, ...prev.filter(r => r.id !== res.data.id)]);
       setTimeout(() => {
         loadRuns();
         loadCandidates();
-      }, 1000);
+      }, 800);
     } catch (err: any) {
       setFormError(err.response?.data?.detail || 'Failed to start discovery');
+      showToast(err.response?.data?.detail || 'Failed to start discovery', 'error');
     } finally {
       setFormSubmitting(false);
     }
@@ -137,33 +161,37 @@ const ProjectDiscovery = () => {
   const handleSelect = async (candidateId: string) => {
     try {
       await selectDiscoveryCandidate(projectId!, candidateId);
-      setActionSuccessMsg('Competitor added to project! Scraping starts when you trigger it on the Scraping page.');
+      showToast('Competitor added to project! Scraping starts on the Scraping page.', 'success');
+      setCandidates(prev =>
+        prev.map(c => (c.id === candidateId ? { ...c, status: 'SELECTED' } : c))
+      );
       setSelectedIds(prev => {
         const next = new Set(prev);
         next.delete(candidateId);
         return next;
       });
-      loadCandidates();
-    } catch (err) {
-      alert('Failed to select candidate.');
+    } catch (err: any) {
+      showToast(err.response?.data?.detail || 'Failed to select candidate', 'error');
     }
   };
 
   const handleReject = async (candidateId: string) => {
     try {
       await rejectDiscoveryCandidate(projectId!, candidateId);
+      showToast('Candidate dismissed.', 'info');
+      setCandidates(prev =>
+        prev.map(c => (c.id === candidateId ? { ...c, status: 'REJECTED' } : c))
+      );
       setSelectedIds(prev => {
         const next = new Set(prev);
         next.delete(candidateId);
         return next;
       });
-      loadCandidates();
-    } catch (err) {
-      alert('Failed to reject candidate.');
+    } catch (err: any) {
+      showToast('Failed to reject candidate', 'error');
     }
   };
 
-  // Toggle single selection
   const toggleSelectCandidate = (candidateId: string, status: string) => {
     if (status !== 'NEW') return;
     setSelectedIds(prev => {
@@ -177,213 +205,245 @@ const ProjectDiscovery = () => {
     });
   };
 
-  // Toggle select all new candidates
-  const newCandidates = candidates.filter(c => c.status === 'NEW');
-  const allNewSelected = newCandidates.length > 0 && newCandidates.every(c => selectedIds.has(c.id));
+  const newCandidates = useMemo(() => candidates.filter(c => c.status === 'NEW'), [candidates]);
 
-  const handleToggleSelectAll = () => {
-    if (allNewSelected) {
+  const handleToggleSelectAllNew = () => {
+    if (selectedIds.size === newCandidates.length && newCandidates.length > 0) {
       setSelectedIds(new Set());
     } else {
       setSelectedIds(new Set(newCandidates.map(c => c.id)));
     }
   };
 
-  // Bulk add selected candidates as competitors
   const handleBulkSelect = async () => {
     if (selectedIds.size === 0) return;
-    const count = selectedIds.size;
     try {
       setBulkSubmitting(true);
-      await bulkSelectDiscoveryCandidates(projectId!, Array.from(selectedIds));
-      setActionSuccessMsg(
-        `✓ Added ${count} competitors to your project! They are now visible on your Competitors and Scraping pages.`
+      const ids = Array.from(selectedIds);
+      await bulkSelectDiscoveryCandidates(projectId!, ids);
+      showToast(`Successfully added ${ids.length} competitors to roster!`, 'success');
+      setCandidates(prev =>
+        prev.map(c => (ids.includes(c.id) ? { ...c, status: 'SELECTED' } : c))
       );
       setSelectedIds(new Set());
-      loadCandidates();
-    } catch (err) {
-      alert('Failed to add selected competitors.');
+    } catch (err: any) {
+      showToast('Failed to select competitors in bulk', 'error');
     } finally {
       setBulkSubmitting(false);
     }
   };
 
-  // Bulk reject selected candidates
   const handleBulkReject = async () => {
     if (selectedIds.size === 0) return;
-    const count = selectedIds.size;
     try {
       setBulkSubmitting(true);
-      await bulkRejectDiscoveryCandidates(projectId!, Array.from(selectedIds));
-      setActionSuccessMsg(`Rejected ${count} candidates.`);
+      const ids = Array.from(selectedIds);
+      await bulkRejectDiscoveryCandidates(projectId!, ids);
+      showToast(`Dismissed ${ids.length} candidates.`, 'info');
+      setCandidates(prev =>
+        prev.map(c => (ids.includes(c.id) ? { ...c, status: 'REJECTED' } : c))
+      );
       setSelectedIds(new Set());
-      loadCandidates();
-    } catch (err) {
-      alert('Failed to reject selected candidates.');
+    } catch (err: any) {
+      showToast('Failed to reject candidates', 'error');
     } finally {
       setBulkSubmitting(false);
     }
   };
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'QUEUED':
-        return 'badge-queued';
-      case 'RUNNING':
-        return 'badge-running';
-      case 'SUCCESS':
-        return 'badge-success';
-      case 'PARTIAL_SUCCESS':
-        return 'badge-warning';
-      case 'FAILED':
-        return 'badge-failed';
-      case 'PAUSED_MANUAL_INTERVENTION':
-        return 'badge-warning';
-      default:
-        return 'badge-default';
-    }
-  };
+  // Filtered candidate list
+  const filteredCandidates = useMemo(() => {
+    return candidates.filter(cand => {
+      if (statusFilter !== 'ALL' && cand.status !== statusFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesName = (cand.business_name || '').toLowerCase().includes(q);
+        const matchesAddress = (cand.address || '').toLowerCase().includes(q);
+        const matchesCat = (cand.category || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesAddress && !matchesCat) return false;
+      }
+      return true;
+    });
+  }, [candidates, statusFilter, searchQuery]);
 
-  const getCandidateBadgeClass = (status: string) => {
-    switch (status) {
-      case 'NEW':
-        return 'badge-new';
-      case 'SELECTED':
-        return 'badge-selected';
-      case 'REJECTED':
-        return 'badge-rejected';
-      case 'ALREADY_COMPETITOR':
-        return 'badge-already';
-      default:
-        return 'badge-default';
-    }
-  };
+  // Counts for filter pills
+  const counts = useMemo(() => {
+    return {
+      all: candidates.length,
+      new: candidates.filter(c => c.status === 'NEW').length,
+      selected: candidates.filter(c => c.status === 'SELECTED').length,
+      already: candidates.filter(c => c.status === 'ALREADY_COMPETITOR').length,
+      rejected: candidates.filter(c => c.status === 'REJECTED').length,
+    };
+  }, [candidates]);
 
-  const radiusPresets = [2, 5, 10, 25, 50];
+  const activeRun = runs.find(r => r.status === 'RUNNING' || r.status === 'QUEUED');
 
   return (
     <AppLayout projectId={projectId}>
-      <header className="topbar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1>Discovery ({newCandidates.length} New Candidates)</h1>
+      {/* Top Header */}
+      <header className="topbar discovery-topbar">
+        <div className="topbar-left">
+          <div className="topbar-title-row">
+            <h1>Discovery Scout</h1>
+            <span className="status-pill status-purple">
+              <Compass size={13} /> Google Places Scout
+            </span>
+          </div>
           <p className="discovery-header-subtitle">
-            Find and choose competitors in your area. Scraping starts strictly when you trigger it on the Scraping page.
+            Find and select competitors in your target radius. Scraping posts and customer reviews happens separately on the Scraping page.
           </p>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="secondary-btn" onClick={() => navigate(`/projects/${projectId}/competitors`)}>
-            Competitors
+        <div className="topbar-actions">
+          <button
+            className="secondary-btn"
+            onClick={() => { loadRuns(); loadCandidates(); }}
+            title="Refresh candidate list"
+          >
+            <RefreshCw size={15} className={loadingCandidates ? 'spin' : ''} />
+            <span>Refresh</span>
           </button>
-          <button className="secondary-btn" onClick={() => navigate(`/projects/${projectId}/scraping`)}>
-            Scraping Page
+          <button
+            className="secondary-btn"
+            onClick={() => navigate(`/projects/${projectId}/competitors`)}
+          >
+            <Users size={15} />
+            <span>Roster</span>
           </button>
-          <button className="primary-btn" onClick={() => setShowDiscoveryForm(!showDiscoveryForm)}>
-            {showDiscoveryForm ? 'Close Form' : '+ New Discovery'}
+          <button
+            className="primary-btn"
+            onClick={() => setShowDiscoveryForm(!showDiscoveryForm)}
+          >
+            <Search size={15} />
+            <span>{showDiscoveryForm ? 'Close Search' : 'New Scout Search'}</span>
           </button>
         </div>
       </header>
 
       <div className="content-area">
-        {actionSuccessMsg && (
-          <div className="discovery-banner-success">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span className="banner-icon">✓</span>
-              <span>{actionSuccessMsg}</span>
+        {/* Decoupling Explanation Banner */}
+        <div className="pipeline-banner discovery">
+          <Info size={20} className="banner-icon" />
+          <div className="banner-content">
+            <strong>Candidate Scouting (Decoupled from Scraping):</strong> This tool scouts Google Maps for businesses within your selected radius. Selecting a business adds it to your <strong>Competitor Roster</strong>. Post and review collection will strictly wait until you trigger a run on the <button onClick={() => navigate(`/projects/${projectId}/scraping`)} className="banner-link">Scraping Pipeline page <ArrowRight size={12} /></button>.
+          </div>
+        </div>
+
+        {/* Real-time Active Scout Radar */}
+        {activeRun && (
+          <div className="active-scout-card animate-slide-in">
+            <div className="radar-spinner">
+              <div className="radar-circle"></div>
+              <Compass size={24} className="radar-icon pulse" />
             </div>
-            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <button
-                className="banner-action-btn"
-                onClick={() => navigate(`/projects/${projectId}/scraping`)}
-              >
-                Go to Scraping Page &rarr;
-              </button>
-              <button className="banner-close-btn" onClick={() => setActionSuccessMsg(null)}>
-                &times;
-              </button>
+            <div className="active-scout-details">
+              <div className="active-scout-header">
+                <span className="status-pill status-running">
+                  <span className="pulse-dot running"></span>
+                  SCANNING GOOGLE MAPS
+                </span>
+                <span className="active-scout-query">"{activeRun.query || 'Nearby Competitors'}"</span>
+              </div>
+              <p className="active-scout-sub">
+                Searching within <strong>{activeRun.radius || 10} km radius</strong> for businesses. Candidates will populate automatically below.
+              </p>
             </div>
           </div>
         )}
 
+        {/* Discovery Search Form Modal/Collapsible */}
         {showDiscoveryForm && (
-          <div className="form-container mb-6 discovery-search-box">
-            <div className="discovery-box-header">
-              <div>
-                <h2>Start Competitor Discovery</h2>
-                <p className="form-subtitle">Search businesses by keyword, location, and radius in kilometers.</p>
+          <div className="discovery-search-panel animate-slide-in">
+            <div className="search-panel-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Sliders size={18} className="text-primary" />
+                <h3>Scout Radius & Search Parameters</h3>
               </div>
-              <button className="icon-btn" onClick={() => setShowDiscoveryForm(false)}>&times;</button>
+              <button
+                className="close-panel-btn"
+                onClick={() => setShowDiscoveryForm(false)}
+                aria-label="Close search form"
+              >
+                <X size={18} />
+              </button>
             </div>
 
-            {formError && <div className="state-message error">{formError}</div>}
+            {formError && (
+              <div className="error-banner">
+                <Info size={16} />
+                <span>{formError}</span>
+              </div>
+            )}
 
-            <form onSubmit={handleStartDiscovery} className="create-form">
-              <div className="form-grid-2">
-                <div className="form-group">
-                  <label>Search Query / Keywords *</label>
+            <form onSubmit={handleStartDiscovery} className="scout-form">
+              <div className="form-grid">
+                <div className="form-field">
+                  <label>Search Query / Keyword</label>
                   <input
                     type="text"
                     value={formQuery}
                     onChange={e => setFormQuery(e.target.value)}
-                    placeholder="e.g. bakeries, cafes, pastry shops"
+                    placeholder="e.g. bakeries, artisanal cafes, sweet shops"
                     required
                   />
+                  <span className="field-hint">Business type or keywords to find on Google Maps</span>
                 </div>
-                <div className="form-group">
-                  <label>Location (City / Area)</label>
+
+                <div className="form-field">
+                  <label>Location / Landmark (Optional)</label>
                   <input
                     type="text"
                     value={formLocation}
                     onChange={e => setFormLocation(e.target.value)}
-                    placeholder="e.g. Bandra, Mumbai"
+                    placeholder="e.g. Bandra West, Mumbai"
                   />
+                  <span className="field-hint">Defaults to project location if omitted</span>
                 </div>
               </div>
 
-              <div className="form-grid-2" style={{ marginTop: '16px' }}>
-                <div className="form-group">
-                  <label>Business Category (Optional)</label>
-                  <input
-                    type="text"
-                    value={formCategory}
-                    onChange={e => setFormCategory(e.target.value)}
-                    placeholder="e.g. Bakery"
-                  />
+              {/* Radius in Kilometers Picker */}
+              <div className="radius-selector-box">
+                <div className="radius-header">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <MapPin size={16} className="text-primary" />
+                    <span>Search Range (Radius in Kilometers)</span>
+                  </label>
+                  <span className="radius-val-badge">{formRadius} km</span>
                 </div>
 
-                <div className="form-group">
-                  <label>
-                    Search Radius (Range in km): <strong style={{ color: '#60a5fa' }}>{formRadius} km</strong>
-                  </label>
-                  <div className="radius-selector-wrap">
-                    <div className="radius-presets">
-                      {radiusPresets.map(r => (
-                        <button
-                          key={r}
-                          type="button"
-                          className={`radius-pill ${formRadius === r ? 'active' : ''}`}
-                          onClick={() => setFormRadius(r)}
-                        >
-                          {r} km
-                        </button>
-                      ))}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
-                      <input
-                        type="range"
-                        min="1"
-                        max="50"
-                        step="1"
-                        value={formRadius}
-                        onChange={e => setFormRadius(Number(e.target.value))}
-                        className="radius-slider"
-                      />
-                      <span style={{ fontSize: '12px', color: '#94a3b8', minWidth: '45px' }}>{formRadius} km</span>
-                    </div>
+                <div className="radius-presets">
+                  {radiusPresets.map(preset => (
+                    <button
+                      type="button"
+                      key={preset}
+                      className={`preset-btn ${formRadius === preset ? 'active' : ''}`}
+                      onClick={() => setFormRadius(preset)}
+                    >
+                      {preset} km
+                    </button>
+                  ))}
+                </div>
+
+                <div className="radius-slider-wrap">
+                  <input
+                    type="range"
+                    min="1"
+                    max="50"
+                    step="1"
+                    value={formRadius}
+                    onChange={e => setFormRadius(Number(e.target.value))}
+                    className="modern-range-slider"
+                  />
+                  <div className="slider-labels">
+                    <span>1 km</span>
+                    <span>10 km</span>
+                    <span>25 km</span>
+                    <span>50 km</span>
                   </div>
                 </div>
               </div>
 
-              <div className="form-actions" style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <div className="form-actions-row">
                 <button
                   type="button"
                   className="secondary-btn"
@@ -391,219 +451,305 @@ const ProjectDiscovery = () => {
                 >
                   Cancel
                 </button>
-                <button type="submit" className="primary-btn" disabled={formSubmitting}>
-                  {formSubmitting ? 'Searching...' : `Search within ${formRadius} km`}
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={formSubmitting}
+                >
+                  <Search size={16} />
+                  <span>{formSubmitting ? 'Scouting Google Maps...' : `Search within ${formRadius} km`}</span>
                 </button>
               </div>
             </form>
           </div>
         )}
 
-        {/* Multi-Select Floating / Sticky Action Bar */}
+        {/* Candidate Controls: Status Tabs & Quick Search */}
+        <div className="candidate-controls-bar">
+          <div className="status-tabs">
+            <button
+              className={`tab-btn ${statusFilter === 'ALL' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('ALL')}
+            >
+              All ({counts.all})
+            </button>
+            <button
+              className={`tab-btn ${statusFilter === 'NEW' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('NEW')}
+            >
+              New Candidates ({counts.new})
+            </button>
+            <button
+              className={`tab-btn ${statusFilter === 'SELECTED' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('SELECTED')}
+            >
+              Selected ({counts.selected})
+            </button>
+            <button
+              className={`tab-btn ${statusFilter === 'ALREADY_COMPETITOR' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('ALREADY_COMPETITOR')}
+            >
+              In Roster ({counts.already})
+            </button>
+            <button
+              className={`tab-btn ${statusFilter === 'REJECTED' ? 'active' : ''}`}
+              onClick={() => setStatusFilter('REJECTED')}
+            >
+              Dismissed ({counts.rejected})
+            </button>
+          </div>
+
+          <div className="filter-search-wrap">
+            <Search size={15} className="search-icon" />
+            <input
+              type="text"
+              placeholder="Filter candidates..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              className="quick-search-input"
+            />
+            {searchQuery && (
+              <button
+                className="clear-search-btn"
+                onClick={() => setSearchQuery('')}
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Quick Multi-Select Header (when NEW candidates available) */}
+        {newCandidates.length > 0 && statusFilter !== 'SELECTED' && statusFilter !== 'ALREADY_COMPETITOR' && (
+          <div className="multi-select-header">
+            <button
+              className="select-all-btn"
+              onClick={handleToggleSelectAllNew}
+            >
+              {selectedIds.size === newCandidates.length && newCandidates.length > 0 ? (
+                <CheckSquare size={16} className="text-primary" />
+              ) : (
+                <Square size={16} />
+              )}
+              <span>
+                {selectedIds.size === newCandidates.length && newCandidates.length > 0
+                  ? 'Deselect All New'
+                  : `Select All New (${newCandidates.length})`}
+              </span>
+            </button>
+            {selectedIds.size > 0 && (
+              <span className="selected-counter-pill">
+                {selectedIds.size} selected
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Candidates List Grid */}
+        {loadingCandidates && candidates.length === 0 ? (
+          <div className="candidates-loading-grid">
+            {[1, 2, 3, 4].map(n => (
+              <div key={n} className="candidate-card-skeleton skeleton" style={{ height: '180px' }} />
+            ))}
+          </div>
+        ) : filteredCandidates.length === 0 ? (
+          <div className="empty-candidates-card">
+            <div className="empty-icon-box">
+              <Compass size={32} />
+            </div>
+            <h3>No Candidates Found</h3>
+            <p>
+              {candidates.length === 0
+                ? 'Launch your first Scout Search to find local competitors on Google Maps.'
+                : 'No candidates match your current filter or search criteria.'}
+            </p>
+            {candidates.length === 0 && (
+              <button
+                className="primary-btn mt-4"
+                onClick={() => setShowDiscoveryForm(true)}
+              >
+                <Search size={16} />
+                <span>Launch Scout Search</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="candidates-grid">
+            {filteredCandidates.map(cand => {
+              const isSelected = selectedIds.has(cand.id);
+              const isNew = cand.status === 'NEW';
+              const isRoster = cand.status === 'ALREADY_COMPETITOR';
+              const isSelectedStatus = cand.status === 'SELECTED';
+
+              return (
+                <div
+                  key={cand.id}
+                  className={`candidate-card ${isSelected ? 'is-selected' : ''} ${!isNew ? 'is-settled' : ''}`}
+                  onClick={() => isNew && toggleSelectCandidate(cand.id, cand.status)}
+                >
+                  <div className="card-top">
+                    {/* Checkbox for NEW items */}
+                    {isNew && (
+                      <div
+                        className="custom-checkbox"
+                        onClick={e => {
+                          e.stopPropagation();
+                          toggleSelectCandidate(cand.id, cand.status);
+                        }}
+                      >
+                        {isSelected ? (
+                          <CheckSquare size={18} className="checkbox-checked" />
+                        ) : (
+                          <Square size={18} className="checkbox-empty" />
+                        )}
+                      </div>
+                    )}
+
+                    <div className="business-title-wrap">
+                      <h4>{cand.business_name}</h4>
+                      {cand.category && (
+                        <span className="category-pill">{cand.category}</span>
+                      )}
+                    </div>
+
+                    {/* Status Pill */}
+                    <div className="card-status-slot">
+                      {isNew && <span className="status-pill status-queued">NEW</span>}
+                      {isSelectedStatus && (
+                        <span className="status-pill status-success">
+                          <Check size={12} /> ADDED
+                        </span>
+                      )}
+                      {isRoster && (
+                        <span className="status-pill status-purple">
+                          IN ROSTER
+                        </span>
+                      )}
+                      {cand.status === 'REJECTED' && (
+                        <span className="status-pill status-failed">DISMISSED</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Badges: Rating & Distance */}
+                  <div className="candidate-badges-row">
+                    {cand.distance_km != null && (
+                      <span className="distance-badge">
+                        <MapPin size={12} /> {cand.distance_km} km away
+                      </span>
+                    )}
+                    {cand.rating != null && (
+                      <span className="rating-badge">
+                        <Star size={12} className="star-icon" />
+                        <strong>{cand.rating.toFixed(1)}</strong>
+                        <span className="review-count">({cand.review_count || 0})</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Address */}
+                  {cand.address && (
+                    <p className="candidate-address" title={cand.address}>
+                      {cand.address}
+                    </p>
+                  )}
+
+                  {/* External Links */}
+                  <div className="candidate-links-row" onClick={e => e.stopPropagation()}>
+                    {cand.source_url && (
+                      <a
+                        href={cand.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="card-ext-link"
+                      >
+                        Google Maps <ExternalLink size={12} />
+                      </a>
+                    )}
+                    {cand.website && (
+                      <a
+                        href={cand.website}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="card-ext-link"
+                      >
+                        Website <ExternalLink size={12} />
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Action Buttons */}
+                  {isNew && (
+                    <div className="card-actions-row" onClick={e => e.stopPropagation()}>
+                      <button
+                        className="btn-select-candidate"
+                        onClick={() => handleSelect(cand.id)}
+                        title="Add to project competitor roster"
+                      >
+                        <Check size={14} /> Add to Roster
+                      </button>
+                      <button
+                        className="btn-dismiss-candidate"
+                        onClick={() => handleReject(cand.id)}
+                        title="Dismiss candidate"
+                      >
+                        <X size={14} /> Dismiss
+                      </button>
+                    </div>
+                  )}
+
+                  {cand.status === 'REJECTED' && (
+                    <div className="card-actions-row" onClick={e => e.stopPropagation()}>
+                      <button
+                        className="btn-reconsider"
+                        onClick={() => handleSelect(cand.id)}
+                      >
+                        + Reconsider & Add
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Sticky Floating Multi-Select Action Bar */}
         {selectedIds.size > 0 && (
-          <div className="bulk-selection-bar">
-            <div className="bulk-selection-info">
-              <span className="selection-badge">{selectedIds.size}</span>
-              <span className="selection-text">
-                {selectedIds.size === 1 ? '1 competitor' : `${selectedIds.size} competitors`} selected for project
+          <div className="floating-bulk-bar animate-slide-in">
+            <div className="bulk-bar-info">
+              <span className="bulk-badge">{selectedIds.size}</span>
+              <span className="bulk-label">
+                {selectedIds.size === 1 ? '1 competitor' : `${selectedIds.size} competitors`} selected
               </span>
             </div>
-            <div className="bulk-selection-actions">
+            <div className="bulk-bar-actions">
               <button
-                className="primary-btn bulk-btn"
+                className="primary-btn bulk-action-btn"
                 onClick={handleBulkSelect}
                 disabled={bulkSubmitting}
               >
-                {bulkSubmitting ? 'Adding...' : `✓ Add ${selectedIds.size} as Competitors`}
+                <Check size={16} />
+                <span>{bulkSubmitting ? 'Adding...' : `Add ${selectedIds.size} to Roster`}</span>
               </button>
               <button
-                className="secondary-btn bulk-btn-reject"
+                className="secondary-btn bulk-dismiss-btn"
                 onClick={handleBulkReject}
                 disabled={bulkSubmitting}
               >
-                Reject Selected
+                <X size={15} />
+                <span>Dismiss</span>
               </button>
               <button
-                className="text-btn"
+                className="bulk-cancel-btn"
                 onClick={() => setSelectedIds(new Set())}
                 disabled={bulkSubmitting}
               >
-                Deselect All
+                Clear
               </button>
             </div>
           </div>
         )}
-
-        <div className="discovery-layout">
-          {/* Left Column: Runs History */}
-          <div className="runs-column">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h2 className="section-title">Runs History</h2>
-              <button className="icon-btn" onClick={loadRuns} title="Refresh Runs">&#x21bb;</button>
-            </div>
-            {loadingRuns && <div className="state-message">Loading runs...</div>}
-            {!loadingRuns && runs.length === 0 && (
-              <div className="empty-state-small">No discovery runs yet. Click "+ New Discovery" above.</div>
-            )}
-            <div className="runs-list">
-              {runs.map(run => (
-                <div key={run.id} className="run-card">
-                  <div className="run-header">
-                    <span className="run-date">{run.started_at ? new Date(run.started_at).toLocaleDateString() : 'Pending'}</span>
-                    <span className={`status-badge ${getStatusBadgeClass(run.status)}`}>{run.status.replace(/_/g, ' ')}</span>
-                  </div>
-                  <div className="run-details">
-                    {run.query && <div><strong>Query:</strong> {run.query}</div>}
-                    {run.location && <div><strong>Location:</strong> {run.location}</div>}
-                    <div><strong>Radius:</strong> {run.radius || 10} km</div>
-                    {run.error_message && (
-                      <div style={{ color: 'var(--accent-red)', fontSize: '0.8rem', marginTop: '4px' }}>
-                        {run.error_message}
-                      </div>
-                    )}
-                  </div>
-                  <div className="run-stats">
-                    <span>{run.total_candidates} Found</span>
-                    <span>{run.duplicates_skipped} Skipped</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Right Column: Candidates */}
-          <div className="candidates-column">
-            <div className="candidates-header-row">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <h2 className="section-title" style={{ margin: 0 }}>
-                  Candidates ({candidates.length})
-                </h2>
-                {newCandidates.length > 0 && (
-                  <label className="select-all-label">
-                    <input
-                      type="checkbox"
-                      checked={allNewSelected}
-                      onChange={handleToggleSelectAll}
-                    />
-                    <span>Select All New ({newCandidates.length})</span>
-                  </label>
-                )}
-              </div>
-              <button className="icon-btn" onClick={loadCandidates} title="Refresh Candidates">&#x21bb;</button>
-            </div>
-
-            {loadingCandidates && <div className="state-message">Loading candidates...</div>}
-            {!loadingCandidates && candidates.length === 0 && (
-              <div className="empty-state">
-                No discovery candidates found. Start a new discovery run with a keyword and radius in km.
-              </div>
-            )}
-
-            <div className="candidates-list">
-              {candidates.map(cand => {
-                const isSelected = selectedIds.has(cand.id);
-                const isNew = cand.status === 'NEW';
-                return (
-                  <div
-                    key={cand.id}
-                    className={`candidate-card ${isSelected ? 'selected' : ''} ${!isNew ? 'non-selectable' : ''}`}
-                    onClick={() => isNew && toggleSelectCandidate(cand.id, cand.status)}
-                  >
-                    <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start', flex: 1 }}>
-                      {isNew && (
-                        <div className="candidate-checkbox-wrap" onClick={e => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleSelectCandidate(cand.id, cand.status)}
-                            className="candidate-checkbox"
-                          />
-                        </div>
-                      )}
-
-                      <div className="candidate-info">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                          <h3 style={{ margin: 0 }}>{cand.business_name}</h3>
-                          {isSelected && (
-                            <span className="selected-tag">✓ Selected</span>
-                          )}
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginTop: '6px', flexWrap: 'wrap' }}>
-                          {cand.category && <span className="category-badge">{cand.category}</span>}
-                          {cand.distance_km != null && (
-                            <span className="distance-badge">
-                              📍 {cand.distance_km} km away
-                            </span>
-                          )}
-                          {cand.rating && (
-                            <span className="rating-badge">
-                              ★ {cand.rating} ({cand.review_count || 0})
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="candidate-meta" style={{ marginTop: '8px' }}>
-                          {cand.address && <span>{cand.address}</span>}
-                        </div>
-
-                        <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
-                          {cand.source_url && (
-                            <a
-                              href={cand.source_url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="maps-link"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              Google Maps &rarr;
-                            </a>
-                          )}
-                          {cand.website && (
-                            <a
-                              href={cand.website}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="maps-link"
-                              onClick={e => e.stopPropagation()}
-                            >
-                              Website &rarr;
-                            </a>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="candidate-actions" onClick={e => e.stopPropagation()}>
-                      <div className={`status-badge ${getCandidateBadgeClass(cand.status)}`} style={{ marginBottom: '12px', textAlign: 'center' }}>
-                        {cand.status.replace(/_/g, ' ')}
-                      </div>
-
-                      {isNew && (
-                        <div className="action-buttons">
-                          <button
-                            className="primary-btn-sm"
-                            onClick={() => handleSelect(cand.id)}
-                            title="Add as competitor"
-                          >
-                            + Select
-                          </button>
-                          <button
-                            className="secondary-btn-sm"
-                            onClick={() => handleReject(cand.id)}
-                            title="Reject candidate"
-                          >
-                            Reject
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
       </div>
     </AppLayout>
   );
