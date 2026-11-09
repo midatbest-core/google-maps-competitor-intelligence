@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import select, func, or_, desc, asc
+from sqlalchemy import select, func, or_, desc, asc, distinct
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 
@@ -92,8 +92,15 @@ class PostService:
         query = query.offset((page - 1) * page_size).limit(page_size)
         
         posts = query.all()
-        
-        # To avoid N+1 for media and analysis, we could use joinedload, 
+
+        if not posts:
+            return {
+                "items": [],
+                "total": total or 0,
+                "page": page,
+                "page_size": page_size,
+                "pages": 0
+            } 
         # but since page_size <= 100, we can let SQLAlchemy lazy load or we explicitly eager load.
         # It's cleaner to eager load.
         from sqlalchemy.orm import selectinload
