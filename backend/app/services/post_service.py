@@ -80,13 +80,14 @@ class PostService:
             query = query.filter(AIAnalysis.content_type == content_type)
 
         # Count total
-        total = query.with_entities(func.count(Post.id)).scalar()
+        total = query.with_entities(func.count(distinct(Post.id))).scalar()
         
         # Bounded page size
         page_size = max(1, min(page_size, 100))
         page = max(1, page)
         
         # Order and paginate
+        query = query.distinct()
         query = query.order_by(desc(Post.published_date), desc(Post.id))
         query = query.offset((page - 1) * page_size).limit(page_size)
         

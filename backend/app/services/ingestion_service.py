@@ -50,7 +50,7 @@ class IngestionService:
             if post:
                 return post
 
-        # Priority 3/4: fingerprint
+        # Priority 3: fingerprint
         if post_data.fingerprint:
             post = self.db.query(Post).filter(
                 Post.business_id == business_id,
@@ -58,6 +58,19 @@ class IngestionService:
             ).first()
             if post:
                 return post
+
+        # Priority 4: Normalized text content matching for the same business
+        if post_data.text_content and len(post_data.text_content.strip()) > 15:
+            norm_incoming = " ".join(post_data.text_content.lower().split())
+            existing_posts = self.db.query(Post).filter(
+                Post.business_id == business_id,
+                Post.text_content.isnot(None)
+            ).all()
+            for ep in existing_posts:
+                if ep.text_content:
+                    norm_existing = " ".join(ep.text_content.lower().split())
+                    if norm_existing == norm_incoming or (len(norm_incoming) > 40 and norm_incoming[:80] == norm_existing[:80]):
+                        return ep
 
         return None
 

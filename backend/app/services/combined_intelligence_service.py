@@ -93,8 +93,16 @@ class CombinedIntelligenceService:
         posts_by_biz: Dict[str, List[Dict[str, Any]]] = {}
         reviews_by_biz: Dict[str, List[Dict[str, Any]]] = {}
 
+        seen_post_texts: set[tuple[str, str]] = set()
         for post, analysis in posts_with_analysis:
             biz_name = businesses.get(post.business_id, BusinessProfile(business_name="Unknown")).business_name
+            norm_text = (post.text_content or "").strip().lower()
+            text_key = (post.business_id, norm_text[:120])
+            if norm_text and text_key in seen_post_texts:
+                continue
+            if norm_text:
+                seen_post_texts.add(text_key)
+
             posts_by_biz.setdefault(biz_name, []).append({
                 "post_id": post.id,
                 "text": (post.text_content or "")[:200],

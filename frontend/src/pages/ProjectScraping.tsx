@@ -204,16 +204,41 @@ const ProjectScraping: React.FC = () => {
       return;
     }
 
+    // 1. Instantly open scraping window view the exact moment the button is clicked (zero delay)
+    const tempId = `run-${Date.now()}`;
+    const optimisticRun: ScrapeRun = {
+      id: tempId,
+      project_id: projectId,
+      status: 'QUEUED',
+      start_time: new Date().toISOString(),
+      competitors_attempted: competitors.length,
+      competitors_succeeded: 0,
+      competitors_failed: 0,
+      competitor_runs: competitors.map(c => ({
+        id: `pending-${c.id}`,
+        business_id: c.business_id,
+        business: c.business,
+        status: 'PENDING',
+        posts_discovered: 0,
+        new_posts: 0,
+        duplicates_skipped: 0,
+      })),
+    };
+
+    setActiveRunId(tempId);
+    setActiveRunDetails(optimisticRun);
+    setRuns(prev => [optimisticRun, ...prev.filter(r => r.id !== tempId)]);
     setStarting(true);
+
     try {
       const res = await startScrape(projectId);
       const newRun = res.data;
 
-      // Instantly open and display the new run before background requests finish
+      // Update with server confirmed run ID
       userInitiatedRunIdsRef.current.add(newRun.id);
       setActiveRunId(newRun.id);
       setActiveRunDetails(newRun);
-      setRuns(prev => [newRun, ...prev.filter(r => r.id !== newRun.id)]);
+      setRuns(prev => [newRun, ...prev.filter(r => r.id !== tempId && r.id !== newRun.id)]);
 
       showToast(`Scrape pipeline started for ${competitors.length} competitors!`, 'info');
       startPolling();
@@ -221,6 +246,12 @@ const ProjectScraping: React.FC = () => {
     } catch (err: any) {
       const msg = err.response?.data?.detail || 'Failed to start scrape run';
       showToast(msg, 'error');
+      // Rollback optimistic run on failure
+      setRuns(prev => prev.filter(r => r.id !== tempId));
+      if (activeRunId === tempId) {
+        setActiveRunId(runs[0]?.id || null);
+        setActiveRunDetails(runs[0] || null);
+      }
       await loadData();
     } finally {
       setStarting(false);
