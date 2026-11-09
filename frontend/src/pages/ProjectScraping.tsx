@@ -52,6 +52,8 @@ const ProjectScraping: React.FC = () => {
   const [runs, setRuns] = useState<ScrapeRun[]>([]);
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const activeRunIdRef = useRef<string | null>(null);
+  activeRunIdRef.current = activeRunId;
   const [activeRunDetails, setActiveRunDetails] = useState<ScrapeRun | null>(null);
 
   const [loading, setLoading] = useState(true);
@@ -88,9 +90,11 @@ const ProjectScraping: React.FC = () => {
           userInitiatedRunIdsRef.current.add(active.id);
         }
         setActiveRunId(active.id);
+        activeRunIdRef.current = active.id;
         setActiveRunDetails(prev => prev?.id === active.id ? prev : active);
-      } else if (sortedRuns.length > 0 && !activeRunId) {
+      } else if (sortedRuns.length > 0 && !activeRunIdRef.current) {
         setActiveRunId(sortedRuns[0].id);
+        activeRunIdRef.current = sortedRuns[0].id;
         setActiveRunDetails(sortedRuns[0]);
       }
     } catch (err: any) {
@@ -102,6 +106,9 @@ const ProjectScraping: React.FC = () => {
   };
 
   const fetchActiveRunDetails = async (runId: string) => {
+    if (!runId || runId.startsWith('run-') || runId.startsWith('temp-')) {
+      return;
+    }
     try {
       const res = await getScrapeRun(runId);
       setActiveRunDetails(res.data);
@@ -151,8 +158,20 @@ const ProjectScraping: React.FC = () => {
           stopPolling();
         }
 
-        if (activeRunId) {
-          await fetchActiveRunDetails(activeRunId);
+        let targetId = activeRunIdRef.current;
+        // If current active ID is optimistic/temporary, see if backend created the active run
+        if (targetId && (targetId.startsWith('run-') || targetId.startsWith('temp-'))) {
+          const serverActiveRun = sorted.find(r => ['QUEUED', 'RUNNING', 'RETRYING'].includes(r.status));
+          if (serverActiveRun) {
+            targetId = serverActiveRun.id;
+            setActiveRunId(serverActiveRun.id);
+            activeRunIdRef.current = serverActiveRun.id;
+            setActiveRunDetails(serverActiveRun);
+          }
+        }
+
+        if (targetId && !targetId.startsWith('run-') && !targetId.startsWith('temp-')) {
+          await fetchActiveRunDetails(targetId);
         }
       } catch (e) {
         console.error('Polling error', e);
@@ -175,7 +194,7 @@ const ProjectScraping: React.FC = () => {
   }, [projectId]);
 
   useEffect(() => {
-    if (activeRunId) {
+    if (activeRunId && !activeRunId.startsWith('run-') && !activeRunId.startsWith('temp-')) {
       fetchActiveRunDetails(activeRunId);
 
       const run = runs.find(r => r.id === activeRunId);
@@ -189,8 +208,11 @@ const ProjectScraping: React.FC = () => {
 
   const handleSelectRun = (run: ScrapeRun) => {
     setActiveRunId(run.id);
+    activeRunIdRef.current = run.id;
     setActiveRunDetails(run); // Immediately switch details view so user sees it right away!
-    fetchActiveRunDetails(run.id);
+    if (!run.id.startsWith('run-') && !run.id.startsWith('temp-')) {
+      fetchActiveRunDetails(run.id);
+    }
     if (['QUEUED', 'RUNNING', 'RETRYING'].includes(run.status)) {
       userInitiatedRunIdsRef.current.add(run.id);
       startPolling();
@@ -226,9 +248,11 @@ const ProjectScraping: React.FC = () => {
     };
 
     setActiveRunId(tempId);
+    activeRunIdRef.current = tempId;
     setActiveRunDetails(optimisticRun);
     setRuns(prev => [optimisticRun, ...prev.filter(r => r.id !== tempId)]);
     setStarting(true);
+    startPolling();
 
     try {
       const res = await startScrape(projectId);
@@ -237,6 +261,7 @@ const ProjectScraping: React.FC = () => {
       // Update with server confirmed run ID
       userInitiatedRunIdsRef.current.add(newRun.id);
       setActiveRunId(newRun.id);
+      activeRunIdRef.current = newRun.id;
       setActiveRunDetails(newRun);
       setRuns(prev => [newRun, ...prev.filter(r => r.id !== tempId && r.id !== newRun.id)]);
 
@@ -248,8 +273,9 @@ const ProjectScraping: React.FC = () => {
       showToast(msg, 'error');
       // Rollback optimistic run on failure
       setRuns(prev => prev.filter(r => r.id !== tempId));
-      if (activeRunId === tempId) {
+      if (activeRunIdRef.current === tempId) {
         setActiveRunId(runs[0]?.id || null);
+        activeRunIdRef.current = runs[0]?.id || null;
         setActiveRunDetails(runs[0] || null);
       }
       await loadData();
