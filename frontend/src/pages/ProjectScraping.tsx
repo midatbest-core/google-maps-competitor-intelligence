@@ -59,6 +59,8 @@ const ProjectScraping: React.FC = () => {
   const [resuming, setResuming] = useState(false);
 
   const pollTimerRef = useRef<number | null>(null);
+  const completedRunsNotifiedRef = useRef<Set<string>>(new Set());
+  const userInitiatedRunIdsRef = useRef<Set<string>>(new Set());
 
   const loadData = async () => {
     try {
@@ -82,9 +84,14 @@ const ProjectScraping: React.FC = () => {
         ['QUEUED', 'RUNNING', 'RETRYING', 'PAUSED_MANUAL_INTERVENTION'].includes(r.status)
       );
       if (active) {
+        if (['QUEUED', 'RUNNING', 'RETRYING'].includes(active.status)) {
+          userInitiatedRunIdsRef.current.add(active.id);
+        }
         setActiveRunId(active.id);
+        setActiveRunDetails(prev => prev?.id === active.id ? prev : active);
       } else if (sortedRuns.length > 0 && !activeRunId) {
         setActiveRunId(sortedRuns[0].id);
+        setActiveRunDetails(sortedRuns[0]);
       }
     } catch (err: any) {
       console.error(err);
@@ -101,8 +108,23 @@ const ProjectScraping: React.FC = () => {
 
       if (['SUCCESS', 'PARTIAL_SUCCESS', 'FAILED', 'CANCELLED'].includes(res.data.status)) {
         stopPolling();
-        if (res.data.status === 'SUCCESS') {
-          showToast('Scraping run completed successfully!', 'success');
+
+        // ONLY notify if this run was actively started/running in this session,
+        // and has not already shown a completion notification
+        if (
+          userInitiatedRunIdsRef.current.has(runId) &&
+          !completedRunsNotifiedRef.current.has(runId)
+        ) {
+          completedRunsNotifiedRef.current.add(runId);
+          userInitiatedRunIdsRef.current.delete(runId);
+
+          if (res.data.status === 'SUCCESS') {
+            showToast('Scraping run completed successfully!', 'success');
+          } else if (res.data.status === 'PARTIAL_SUCCESS') {
+            showToast('Scrape run finished with some competitor warnings.', 'warning');
+          } else if (res.data.status === 'FAILED') {
+            showToast('Scraping run failed.', 'error');
+          }
         }
       }
     } catch (err) {
@@ -123,6 +145,11 @@ const ProjectScraping: React.FC = () => {
           return b.id.localeCompare(a.id);
         });
         setRuns(sorted);
+
+        const hasActive = sorted.some(r => ['QUEUED', 'RUNNING', 'RETRYING'].includes(r.status));
+        if (!hasActive) {
+          stopPolling();
+        }
 
         if (activeRunId) {
           await fetchActiveRunDetails(activeRunId);
@@ -160,6 +187,16 @@ const ProjectScraping: React.FC = () => {
     }
   }, [activeRunId]);
 
+  const handleSelectRun = (run: ScrapeRun) => {
+    setActiveRunId(run.id);
+    setActiveRunDetails(run); // Immediately switch details view so user sees it right away!
+    fetchActiveRunDetails(run.id);
+    if (['QUEUED', 'RUNNING', 'RETRYING'].includes(run.status)) {
+      userInitiatedRunIdsRef.current.add(run.id);
+      startPolling();
+    }
+  };
+
   const handleStartScrape = async () => {
     if (!projectId) return;
     if (competitors.length === 0) {
@@ -170,16 +207,43 @@ const ProjectScraping: React.FC = () => {
     setStarting(true);
     try {
       const res = await startScrape(projectId);
+      const newRun = res.data;
+
+      // Instantly open and display the new run before background requests finish
+      userInitiatedRunIdsRef.current.add(newRun.id);
+      setActiveRunId(newRun.id);
+      setActiveRunDetails(newRun);
+      setRuns(prev => [newRun, ...prev.filter(r => r.id !== newRun.id)]);
+
       showToast(`Scrape pipeline started for ${competitors.length} competitors!`, 'info');
-      setActiveRunId(res.data.id);
-      await loadData();
       startPolling();
+      loadData();
     } catch (err: any) {
       const msg = err.response?.data?.detail || 'Failed to start scrape run';
       showToast(msg, 'error');
       await loadData();
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleResumeRun = async () => {
+    if (!activeRunId) return;
+    setResuming(true);
+    try {
+      const res = await resumeScrapeRun(activeRunId);
+      userInitiatedRunIdsRef.current.add(activeRunId);
+      completedRunsNotifiedRef.current.delete(activeRunId); // allow notification when resumed run finishes
+      showToast('Resuming scrape run...', 'info');
+      if (res.data) {
+        setActiveRunDetails(res.data);
+      }
+      await loadData();
+      startPolling();
+    } catch (err: any) {
+      showToast(err.response?.data?.detail || 'Failed to resume run', 'error');
+    } finally {
+      setResuming(false);
     }
   };
 
@@ -197,22 +261,6 @@ const ProjectScraping: React.FC = () => {
       await loadData();
     } catch (err: any) {
       showToast(err.response?.data?.detail || 'Failed to delete run', 'error');
-    }
-  };
-
-  const handleResumeRun = async () => {
-    if (!activeRunId) return;
-    setResuming(true);
-    try {
-      await resumeScrapeRun(activeRunId);
-      showToast('Resuming scrape run...', 'info');
-      await fetchActiveRunDetails(activeRunId);
-      await loadData();
-      startPolling();
-    } catch (err: any) {
-      showToast(err.response?.data?.detail || 'Failed to resume run', 'error');
-    } finally {
-      setResuming(false);
     }
   };
 
@@ -341,7 +389,7 @@ const ProjectScraping: React.FC = () => {
                     <div
                       key={run.id}
                       className={`run-card ${isSelected ? 'active' : ''} ${isRunActive ? 'is-active-run' : ''}`}
-                      onClick={() => setActiveRunId(run.id)}
+                      onClick={() => handleSelectRun(run)}
                     >
                       <div className="run-card-top">
                         <span className="run-card-id">#{run.id.split('-')[0]}</span>
