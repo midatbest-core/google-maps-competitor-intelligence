@@ -115,3 +115,6 @@ class ReviewCollectorService:
         summary.status = "SUCCESS"
         return summary
 
+    # Alias for compatibility with worker callers
+    collect_for_business = collect_reviews_for_business
+

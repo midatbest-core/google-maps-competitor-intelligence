@@ -126,7 +126,7 @@ async def _execute_scrape_job(ctx, run_id: str):
                 try:
                     from app.services.review_collector import ReviewCollectorService
                     review_collector = ReviewCollectorService(db)
-                    await review_collector.collect_for_business(c.business, max_browser_reviews=50)
+                    await review_collector.collect_reviews_for_business(c.business, max_browser_reviews=50)
                 except Exception as e:
                     logger.warning(f"Failed to collect reviews for business {c.business_id}: {e}")
 
