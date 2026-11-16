@@ -144,8 +144,7 @@ async def test_posts_and_reviews_independent_e2e_pipeline(db):
         def __getattr__(self, item):
             return getattr(self._session, item)
 
-    with patch("app.services.review_collector.GoogleMapsReviewScraper", return_value=MockReviewScraper()), \
-         patch("app.workers.main.SessionLocal", side_effect=lambda: NonClosingSession(db)):
+    with patch("app.workers.main.SessionLocal", side_effect=lambda: NonClosingSession(db)):
         await scrape_job(ctx, scrape_run.id)
 
     db.refresh(scrape_run)
@@ -163,7 +162,11 @@ async def test_posts_and_reviews_independent_e2e_pipeline(db):
     croissant_post = next(p for p in stored_posts if "croissants" in p.text_content)
     assert croissant_post.fingerprint == "post_fp_croissant"
 
-    # 3. Verify Reviews Persistence & Competitor Association
+    # 3. Verify Reviews Infrastructure Preserved & Usable Independently
+    from app.services.review_collector import ReviewCollectorService
+    review_collector = ReviewCollectorService(db, review_scraper=MockReviewScraper())
+    await review_collector.collect_reviews_for_business(comp_biz, max_browser_reviews=25)
+
     stored_reviews = db.query(Review).filter_by(business_id=comp_biz.id).all()
     assert len(stored_reviews) == 2
     complaint_rev = next(r for r in stored_reviews if r.rating == 1.0)

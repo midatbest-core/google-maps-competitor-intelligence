@@ -32,6 +32,14 @@ class ScrapeService:
         self._verify_project(project_id)
         logger.info(f"Creating scrape run for project {project_id}")
 
+        # Concurrency safety: acquire row lock on Project if DB supports it (PostgreSQL)
+        from app.models.project import Project
+        try:
+            self.db.query(Project).filter(Project.id == project_id).with_for_update().first()
+        except Exception:
+            # Fallback for SQLite in-memory test environments
+            pass
+
         # Handle stale runs & prevent duplicates
         from datetime import datetime, timezone, timedelta
         now = datetime.now(timezone.utc)
@@ -49,28 +57,48 @@ class ScrapeService:
                 r.status = "FAILED"
                 r.error_logs = ["Marked as FAILED due to being stuck in QUEUED"]
                 r.end_time = now
-            elif r.status in ["RUNNING", "RETRYING"] and r.start_time:
-                r_start_time = r.start_time.replace(tzinfo=timezone.utc) if r.start_time.tzinfo is None else r.start_time
-                if (now - r_start_time).total_seconds() > 3600: # 1 hour stale
+            elif r.status in ["RUNNING", "RETRYING"]:
+                r_start_time = r.start_time.replace(tzinfo=timezone.utc) if (r.start_time and r.start_time.tzinfo is None) else r.start_time
+                elapsed = (now - r_start_time).total_seconds() if r_start_time else time_since_creation
+                if elapsed > 900: # 15 mins stale timeout
                     r.status = "FAILED"
-                    r.error_logs = ["Marked as FAILED due to timeout"]
+                    r.error_logs = ["Marked as FAILED due to worker timeout or interruption"]
                     r.end_time = now
+                    # Also mark running competitor runs as FAILED
+                    for cr in r.competitor_runs:
+                        if cr.status == "RUNNING":
+                            cr.status = "FAILED"
+                            cr.error_message = "Worker process interrupted"
                 else:
                     self.db.rollback()
                     raise ValueError(f"Project already has an active run ({r.status})")
-            else:
-                self.db.rollback()
-                raise ValueError(f"Project already has an active run ({r.status})")
+            elif time_since_creation > 600:
+                r.status = "FAILED"
+                r.end_time = now
 
-        self.db.commit()
+        # 1. Determine next sequential run_number for this project within row-locked transaction
+        from sqlalchemy import func, select
+        max_run_num = self.db.scalar(
+            select(func.max(ScrapeRun.run_number)).where(ScrapeRun.project_id == project_id)
+        )
+        if max_run_num is None:
+            total_existing = self.db.scalar(
+                select(func.count(ScrapeRun.id)).where(ScrapeRun.project_id == project_id)
+            )
+            next_run_number = (total_existing or 0) + 1
+        else:
+            next_run_number = max_run_num + 1
 
-        # 1. Create Run
-        run = self.scrape_run_repo.create({
-            "project_id": project_id,
-            "status": "QUEUED"
-        })
+        # 2. Create Run with sequential run_number (held under Project row lock)
+        run = ScrapeRun(
+            project_id=project_id,
+            status="QUEUED",
+            run_number=next_run_number
+        )
+        self.db.add(run)
+        self.db.flush()
 
-        # 2. Add Competitors (Batch insert to eliminate N+1 roundtrips)
+        # 3. Add Competitors (Batch insert to eliminate N+1 roundtrips)
         competitors = self.project_repo.get_competitors(project_id)
         for comp in competitors:
             comp_obj = ScrapeRunCompetitor(
@@ -91,7 +119,22 @@ class ScrapeService:
 
     def get_runs_for_project(self, project_id: str) -> list[ScrapeRun]:
         self._verify_project(project_id)
-        return self.scrape_run_repo.get_runs_for_project(project_id)
+        runs = self.scrape_run_repo.get_runs_for_project(project_id)
+        # Ensure legacy or unassigned runs receive sequential run_number
+        unassigned = [r for r in runs if r.run_number is None]
+        if unassigned:
+            from datetime import datetime
+            sorted_runs = sorted(runs, key=lambda r: r.created_at if r.created_at else datetime.min)
+            assigned_nums = {r.run_number for r in runs if r.run_number is not None}
+            curr = 1
+            for r in sorted_runs:
+                if r.run_number is None:
+                    while curr in assigned_nums:
+                        curr += 1
+                    r.run_number = curr
+                    assigned_nums.add(curr)
+            self.db.commit()
+        return runs
 
     def delete_run(self, project_id: str, run_id: str) -> None:
         self._verify_project(project_id)

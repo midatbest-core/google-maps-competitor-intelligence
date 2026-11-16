@@ -19,9 +19,11 @@ class ScrapeSchedule(Base, TimestampMixin):
 
 class ScrapeRun(Base, TimestampMixin):
     __tablename__ = "scrape_runs"
+    __table_args__ = (UniqueConstraint("project_id", "run_number", name="uq_scrape_runs_project_run_number"),)
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    run_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(50), default="QUEUED") # QUEUED, RUNNING, PARTIAL_SUCCESS, SUCCESS, FAILED
@@ -35,6 +37,12 @@ class ScrapeRun(Base, TimestampMixin):
 
     project = relationship("Project", back_populates="scrape_runs")
     competitor_runs = relationship("ScrapeRunCompetitor", back_populates="scrape_run", cascade="all, delete-orphan")
+
+    @property
+    def display_name(self) -> str:
+        if self.run_number is not None:
+            return f"Scrape {self.run_number:03d}"
+        return f"Scrape #{self.id[:8]}"
 
 
 class ScrapeRunCompetitor(Base, TimestampMixin):

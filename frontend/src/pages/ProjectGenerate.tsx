@@ -4,7 +4,6 @@ import AppLayout from '../components/AppLayout';
 import { useToast } from '../context/ToastContext';
 import { startGeneration, regenerateContent, getGeneration, getGenerations } from '../api';
 import type { GenerationRequest, GeneratedContentResponse } from '../api';
-import ReviewIntelligence from '../components/ReviewIntelligence';
 import {
   Wand2,
   Copy,
@@ -150,9 +149,7 @@ const ProjectGenerate: React.FC = () => {
         <div className="studio-layout">
           {/* Left Form Column */}
           <div className="studio-form-col">
-            {projectId && <ReviewIntelligence projectId={projectId} />}
-
-            <div className="generator-card mt-4">
+            <div className="generator-card">
               <h3 style={{ margin: '0 0 16px', fontSize: '16px', color: 'white' }}>
                 Generation Parameters
               </h3>

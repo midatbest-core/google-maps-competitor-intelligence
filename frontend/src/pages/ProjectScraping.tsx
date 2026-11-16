@@ -21,7 +21,6 @@ import {
   Clock,
   ArrowRight,
   FileText,
-  MessageSquareHeart,
   Sparkles,
   Info,
   ShieldAlert,
@@ -44,6 +43,15 @@ const STATUS_CONFIG: Record<string, { label: string; pillClass: string; icon: st
   ERROR: { label: 'Error', pillClass: 'status-failed', icon: 'failed' },
 };
 
+const formatRunName = (run?: ScrapeRun | null): string => {
+  if (!run) return 'Scrape Run';
+  if (run.display_name) return run.display_name;
+  if (run.run_number !== undefined && run.run_number !== null) {
+    return `Scrape ${String(run.run_number).padStart(3, '0')}`;
+  }
+  return `Scrape #${run.id.slice(0, 8)}`;
+};
+
 const ProjectScraping: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
@@ -59,6 +67,7 @@ const ProjectScraping: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [resuming, setResuming] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [reconnectingMessage, setReconnectingMessage] = useState<string | null>(null);
 
   const pollTimeoutRef = useRef<number | null>(null);
@@ -110,6 +119,38 @@ const ProjectScraping: React.FC = () => {
       showToast('Failed to load scrape runs', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    if (refreshing || !projectId) return;
+    try {
+      setRefreshing(true);
+      const [runsRes, compRes] = await Promise.all([
+        getScrapeRuns(projectId),
+        getProjectCompetitors(projectId),
+      ]);
+
+      setCompetitors(compRes.data);
+
+      const sortedRuns = runsRes.data.sort((a, b) => {
+        if (a.start_time && b.start_time) {
+          return new Date(b.start_time).getTime() - new Date(a.start_time).getTime();
+        }
+        return (b.run_number || 0) - (a.run_number || 0) || b.id.localeCompare(a.id);
+      });
+      setRuns(sortedRuns);
+
+      const targetId = activeRunIdRef.current || sortedRuns[0]?.id;
+      if (targetId && !targetId.startsWith('run-') && !targetId.startsWith('temp-')) {
+        await fetchActiveRunDetails(targetId);
+      }
+      showToast('Scraping data refreshed', 'success');
+    } catch (err: any) {
+      console.error('Refresh error:', err);
+      showToast('Failed to refresh scraping data', 'error');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -440,21 +481,22 @@ const ProjectScraping: React.FC = () => {
           <div className="topbar-title-row">
             <h1>Scraping Pipeline</h1>
             <span className="status-pill status-running">
-              <Database size={13} /> Posts & Reviews Collector
+              <Database size={13} /> Competitor Posts Collector
             </span>
           </div>
           <p className="scraping-header-subtitle">
-            Collect Google Maps posts, photos, and customer reviews for your active competitor roster.
+            Collect Google Maps updates, photos, and promotional posts for your active competitor roster.
           </p>
         </div>
         <div className="topbar-actions">
           <button
             className="secondary-btn"
-            onClick={loadData}
-            title="Refresh runs"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="Refresh runs and competitor progress"
           >
-            <RefreshCw size={15} />
-            <span>Refresh</span>
+            <RefreshCw size={15} className={refreshing ? 'spin' : ''} />
+            <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
           </button>
           <button
             className="secondary-btn"
@@ -505,10 +547,10 @@ const ProjectScraping: React.FC = () => {
                 <span className="status-pill status-running">
                   <span className="pulse-dot running"></span> RUNNING NOW
                 </span>
-                <span className="active-scrape-id">Run #{activeRun.id.split('-')[0]}</span>
+                <span className="active-scrape-id">{formatRunName(activeRun)}</span>
               </div>
               <p className="active-scrape-desc">
-                Extracting posts and reviews for {competitors.length} competitors. Real-time updates stream below automatically.
+                Extracting posts and updates for {competitors.length} competitors. Real-time updates stream below automatically.
               </p>
             </div>
           </div>
@@ -548,7 +590,7 @@ const ProjectScraping: React.FC = () => {
                       onClick={() => handleSelectRun(run)}
                     >
                       <div className="run-card-top">
-                        <span className="run-card-id">#{run.id.split('-')[0]}</span>
+                        <span className="run-card-id">{formatRunName(run)}</span>
                         <div className="run-card-status-wrap">
                           {renderStatusBadge(run.status)}
                           <button
@@ -593,7 +635,7 @@ const ProjectScraping: React.FC = () => {
                 <div className="run-details-top">
                   <div>
                     <span className="details-subtitle">Scrape Run Inspection</span>
-                    <h2>Run #{activeRunDetails.id}</h2>
+                    <h2>{formatRunName(activeRunDetails)}</h2>
                   </div>
                   <div>{renderStatusBadge(activeRunDetails.status)}</div>
                 </div>
@@ -655,13 +697,6 @@ const ProjectScraping: React.FC = () => {
                     >
                       <FileText size={15} />
                       <span>View Posts</span>
-                    </Link>
-                    <Link
-                      to={`/projects/${projectId}/reviews`}
-                      className="secondary-btn"
-                    >
-                      <MessageSquareHeart size={15} />
-                      <span>View Reviews</span>
                     </Link>
                     <Link
                       to={`/projects/${projectId}/intelligence`}

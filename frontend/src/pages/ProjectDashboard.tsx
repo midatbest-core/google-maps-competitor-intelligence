@@ -7,7 +7,6 @@ import {
   Users,
   Database,
   FileText,
-  MessageSquareHeart,
   Sparkles,
   Target,
   Wand2,
@@ -134,7 +133,7 @@ const ProjectDashboard = () => {
               <div className="step-num-badge">3</div>
               <div className="step-content">
                 <strong>Scrape Data</strong>
-                <span>Collect posts & customer reviews</span>
+                <span>Collect posts & business updates</span>
               </div>
             </Link>
 
@@ -170,11 +169,11 @@ const ProjectDashboard = () => {
 
           <div className="stat-card">
             <div className="stat-card-header">
-              <MessageSquareHeart size={18} style={{ color: '#a855f7' }} />
-              <span className="stat-label">Customer Reviews</span>
+              <Compass size={18} style={{ color: '#a855f7' }} />
+              <span className="stat-label">Scouted Candidates</span>
             </div>
-            <div className="stat-value" style={{ color: '#c084fc' }}>{summary.review_count || 0}</div>
-            <span className="stat-foot">Feedback & sentiment records</span>
+            <div className="stat-value" style={{ color: '#c084fc' }}>{summary.discovery_count}</div>
+            <span className="stat-foot">Nearby discovered businesses</span>
           </div>
 
           <div className="stat-card">
@@ -219,7 +218,7 @@ const ProjectDashboard = () => {
                 <h3>Scraping Pipeline</h3>
                 <span className="status-pill status-running">DATA</span>
               </div>
-              <p>Run automated scrapers for all tracked competitors to extract both promotional posts and customer reviews.</p>
+              <p>Run automated scrapers for all tracked competitors to extract promotional posts and business updates.</p>
               <span className="module-link-arrow">Open Pipeline &rarr;</span>
             </div>
           </Link>
@@ -233,7 +232,7 @@ const ProjectDashboard = () => {
                 <h3>Combined Intelligence</h3>
                 <span className="status-pill status-purple">AI INSIGHT</span>
               </div>
-              <p>Compare marketing promises with authentic customer reviews to uncover market gaps and competitor vulnerabilities.</p>
+              <p>Synthesize competitor posts, market gaps, and strategic business opportunities.</p>
               <span className="module-link-arrow">Open Combined Intel &rarr;</span>
             </div>
           </Link>

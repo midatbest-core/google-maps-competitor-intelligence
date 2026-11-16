@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 import logging
 from app.core.config import settings
@@ -11,6 +12,9 @@ from app.services.media_downloader import SimpleMediaDownloader
 from app.core.storage import LocalStorageProvider
 
 logger = logging.getLogger(__name__)
+
+PER_BUSINESS_TIMEOUT: float = 60.0  # Sensible timeout per business
+MAX_RETRIES_PER_BUSINESS: int = 1   # Controlled retries for transient failures
 
 async def startup(ctx):
     logger.info("Worker starting up...")
@@ -77,7 +81,7 @@ async def _execute_scrape_job(ctx, run_id: str):
             c.status = "RUNNING"
             db.commit()
 
-            # Use real scraper logic
+            # Validate target URL
             target_url = c.business.google_maps_url
             if not target_url:
                 c.status = "FAILED"
@@ -85,56 +89,81 @@ async def _execute_scrape_job(ctx, run_id: str):
                 db.commit()
                 continue
 
-            result = await adapter.scrape(target_url)
-
-            c.status = result.status
-            c.error_message = result.error_message
-
-            if result.status == "SUCCESS":
-                c.posts_discovered = len(result.posts)
-                c.new_posts = 0
-
-                # Initialize services
-                storage_provider = LocalStorageProvider(base_dir=settings.LOCAL_STORAGE_DIR)
-                media_downloader = SimpleMediaDownloader()
-                ingestion_service = IngestionService(db, storage_provider, media_downloader)
-
-                # Persist posts and observations
-                for post_data in result.posts:
-                    res = await ingestion_service.ingest_post(
-                        project_id=run.project_id,
-                        business_id=c.business_id,
-                        competitor_run_id=c.id,
-                        post_data=post_data
-                    )
-                    if res.status == "NEW_POST":
-                        c.new_posts += 1
-
-                    if res.status != "FAILED":
-                        if ctx and 'redis' in ctx:
-                            try:
-                                await ctx['redis'].enqueue_job('intelligence_job', res.post_id)
-                            except Exception as e:
-                                logger.error(f"Failed to enqueue intelligence job for {res.post_id}: {e}")
-                        else:
-                            try:
-                                await intelligence_job(ctx, res.post_id)
-                            except Exception as e:
-                                logger.error(f"Failed to run intelligence job for {res.post_id}: {e}")
-
-                # Collect reviews for this business
+            # Per-business execution with controlled retry and timeout
+            result = None
+            for attempt in range(MAX_RETRIES_PER_BUSINESS + 1):
                 try:
-                    from app.services.review_collector import ReviewCollectorService
-                    review_collector = ReviewCollectorService(db)
-                    await review_collector.collect_reviews_for_business(c.business, max_browser_reviews=50)
-                except Exception as e:
-                    logger.warning(f"Failed to collect reviews for business {c.business_id}: {e}")
+                    result = await asyncio.wait_for(
+                        adapter.scrape(target_url),
+                        timeout=PER_BUSINESS_TIMEOUT
+                    )
+                    break
+                except asyncio.TimeoutError:
+                    logger.warning(f"Timeout ({PER_BUSINESS_TIMEOUT}s) on attempt {attempt+1} for {c.business.business_name} ({target_url})")
+                    if attempt < MAX_RETRIES_PER_BUSINESS:
+                        await asyncio.sleep(2)
+                        continue
+                    from app.scraper.schemas import ScrapeResult
+                    result = ScrapeResult(status="ERROR", error_message=f"Timeout: Exceeded {int(PER_BUSINESS_TIMEOUT)}s processing business")
+                except Exception as scrape_err:
+                    logger.warning(f"Error on attempt {attempt+1} for {c.business.business_name}: {scrape_err}")
+                    if attempt < MAX_RETRIES_PER_BUSINESS:
+                        await asyncio.sleep(2)
+                        continue
+                    from app.scraper.schemas import ScrapeResult
+                    result = ScrapeResult(status="ERROR", error_message=str(scrape_err))
+
+            # Isolated post-processing for this competitor
+            try:
+                c.status = result.status if result else "ERROR"
+                c.error_message = result.error_message if result else "Unknown error during scrape"
+
+                if result and result.status == "SUCCESS":
+                    c.posts_discovered = len(result.posts)
+                    c.new_posts = 0
+
+                    storage_provider = LocalStorageProvider(base_dir=settings.LOCAL_STORAGE_DIR)
+                    media_downloader = SimpleMediaDownloader()
+                    ingestion_service = IngestionService(db, storage_provider, media_downloader)
+
+                    for post_data in result.posts:
+                        try:
+                            res = await ingestion_service.ingest_post(
+                                project_id=run.project_id,
+                                business_id=c.business_id,
+                                competitor_run_id=c.id,
+                                post_data=post_data
+                            )
+                            if res.status == "NEW_POST":
+                                c.new_posts += 1
+
+                            if res.status != "FAILED":
+                                if ctx and 'redis' in ctx:
+                                    try:
+                                        await ctx['redis'].enqueue_job('intelligence_job', res.post_id)
+                                    except Exception as e:
+                                        logger.error(f"Failed to enqueue intelligence job for {res.post_id}: {e}")
+                                else:
+                                    try:
+                                        await intelligence_job(ctx, res.post_id)
+                                    except Exception as e:
+                                        logger.error(f"Failed to run intelligence job for {res.post_id}: {e}")
+                        except Exception as post_err:
+                            logger.error(f"Failed to ingest post for business {c.business_id}: {post_err}")
+
+                elif result and result.status == "NO_DATA":
+                    c.posts_discovered = 0
 
                 db.commit()
-            elif result.status == "NO_DATA":
-                c.posts_discovered = 0
-
-            db.commit()
+            except Exception as comp_err:
+                logger.exception(f"Error persisting competitor run {c.id}: {comp_err}")
+                db.rollback()
+                try:
+                    c.status = "ERROR"
+                    c.error_message = f"Error persisting results: {comp_err}"
+                    db.commit()
+                except Exception:
+                    db.rollback()
 
         # Determine final status and counters
         run.competitors_succeeded = sum(1 for c in competitor_runs if c.status in ("SUCCESS", "NO_DATA"))
@@ -168,10 +197,9 @@ async def _execute_scrape_job(ctx, run_id: str):
     finally:
         if not ctx:
             try:
-                import asyncio
-                asyncio.create_task(adapter.close())
-            except Exception:
-                pass
+                await adapter.close()
+            except Exception as close_err:
+                logger.warning(f"Error closing scraper adapter: {close_err}")
         db.close()
 
 
@@ -343,13 +371,8 @@ async def combined_intelligence_job(ctx, project_id: str):
         db.close()
 
 def get_redis_settings():
-    import urllib.parse
-    parsed = urllib.parse.urlparse(settings.REDIS_URL)
-    host = parsed.hostname or "localhost"
-    port = parsed.port or 6379
-    database = int(parsed.path.strip("/")) if parsed.path and parsed.path.strip("/") else 0
-    password = parsed.password
-    return RedisSettings(host=host, port=port, database=database, password=password)
+    from app.core.arq import redis_settings_from_url
+    return redis_settings_from_url(settings.REDIS_URL)
 
 class WorkerSettings:
     functions = [scrape_job, intelligence_job, discovery_job, generate_content_job, combined_intelligence_job]
@@ -358,3 +381,4 @@ class WorkerSettings:
     redis_settings = get_redis_settings()
     on_startup = startup
     on_shutdown = shutdown
+    job_timeout = 1200  # 20 minutes job timeout (capped by per-business 60s timeouts)

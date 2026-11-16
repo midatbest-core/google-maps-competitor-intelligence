@@ -22,6 +22,8 @@ class ScrapeRunCompetitorResponse(BaseModel):
 class ScrapeRunResponse(BaseModel):
     id: str
     project_id: str
+    run_number: Optional[int] = None
+    display_name: Optional[str] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     status: str

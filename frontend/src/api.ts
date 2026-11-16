@@ -136,6 +136,8 @@ export interface ScrapeRunCompetitor {
 export interface ScrapeRun {
   id: string;
   project_id: string;
+  run_number?: number;
+  display_name?: string;
   start_time?: string;
   end_time?: string;
   status: string;

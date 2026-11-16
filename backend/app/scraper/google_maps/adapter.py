@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from bs4 import BeautifulSoup
 from app.scraper.base import SourceAdapter
 from app.scraper.schemas import ScrapeResult, ExtractionFailure
@@ -16,6 +17,7 @@ class GoogleMapsAdapter(SourceAdapter):
     def __init__(self, browser_manager: BrowserManager | None = None):
         self.browser_manager = browser_manager or BrowserManager()
         self._initialized = False
+        self.page = None
 
     async def _init_browser(self):
         if not self._initialized:
@@ -25,17 +27,23 @@ class GoogleMapsAdapter(SourceAdapter):
 
     async def scrape(self, target_identifier: str) -> ScrapeResult:
         """
-        target_identifier here should be the Google Maps URL
+        target_identifier here should be the Google Maps URL.
+        Uses an isolated page per scrape to prevent memory leaks and DOM pollution across businesses.
         """
         result = ScrapeResult()
+        page = None
         
         try:
-            await self._init_browser()
+            # Open a fresh isolated page
+            page = await self.browser_manager.new_page()
+            self.page = page
+            navigator = ProfileNavigator(page)
+            self.navigator = navigator
             
-            nav_success = await self.navigator.navigate_to_updates(target_identifier)
+            nav_success = await navigator.navigate_to_updates(target_identifier)
             
             # Get HTML and parse
-            html = await self.page.content()
+            html = await page.content()
             soup = BeautifulSoup(html, 'html.parser')
             
             # 1. Check for Captcha / Verification
@@ -77,13 +85,21 @@ class GoogleMapsAdapter(SourceAdapter):
             else:
                 result.status = "SUCCESS"
                 
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout while scraping {target_identifier}")
+            result.status = "ERROR"
+            result.error_message = f"Timeout after scraping attempt for {target_identifier}"
         except Exception as e:
             logger.exception("Unexpected error during Google Maps scrape")
             result.status = "ERROR"
             result.error_message = str(e)
+        finally:
+            if page:
+                await self.browser_manager.close_page(page)
             
         return result
 
     async def close(self):
         await self.browser_manager.stop()
+        self.page = None
         self._initialized = False

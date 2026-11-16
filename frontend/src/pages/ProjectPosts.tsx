@@ -147,9 +147,6 @@ const ProjectPosts: React.FC = () => {
             <span className="post-count-badge">{total} posts found</span>
           </div>
           <div style={{ display: 'flex', gap: '10px' }}>
-            <Link to={`/projects/${projectId}/reviews`} className="btn-secondary" style={{ textDecoration: 'none', fontSize: '13px' }}>
-              Customer Reviews →
-            </Link>
             <Link to={`/projects/${projectId}/intelligence`} className="btn-primary" style={{ textDecoration: 'none', fontSize: '13px' }}>
               ⚡ Combined Intelligence →
             </Link>

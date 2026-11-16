@@ -7,7 +7,6 @@ import {
   Compass,
   Database,
   FileText,
-  MessageSquareHeart,
   Sparkles,
   Target,
   Wand2,
@@ -36,6 +35,37 @@ const AppLayout = ({ children, projectId, projectName }: AppLayoutProps) => {
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
+
+  // Set document title appropriately for all routes
+  useEffect(() => {
+    const routeTitles: Record<string, string> = {
+      '/dashboard': 'Dashboard',
+      '/projects/new': 'New Project',
+      '/competitors': 'Competitor Roster',
+      '/discovery': 'Discovery Scout',
+      '/scraping': 'Scraping Pipeline',
+      '/posts': 'Business Posts',
+      '/intelligence': 'Combined Intelligence',
+      '/strategy': 'Content Strategy Gaps',
+      '/generate': 'Generate Content',
+      '/generations': 'Generation History',
+    };
+
+    let titleSuffix = '';
+    for (const [route, label] of Object.entries(routeTitles)) {
+      if (location.pathname.includes(route)) {
+        titleSuffix = ` - ${label}`;
+        break;
+      }
+    }
+    if (projectName) {
+      document.title = `${projectName}${titleSuffix} | MapsIntel Competitor Radar`;
+    } else if (titleSuffix) {
+      document.title = `${titleSuffix.slice(3)} | MapsIntel Competitor Radar`;
+    } else {
+      document.title = 'MapsIntel | Competitor Radar';
+    }
+  }, [location.pathname, projectName]);
 
   const navItemClass = (path: string, exact: boolean = false) => {
     const isActive = exact ? location.pathname === path : location.pathname.includes(path);
@@ -128,10 +158,6 @@ const AppLayout = ({ children, projectId, projectName }: AppLayoutProps) => {
               <Link to={`/projects/${projectId}/posts`} className={navItemClass(`/projects/${projectId}/posts`)}>
                 <FileText size={18} />
                 <span>Business Posts</span>
-              </Link>
-              <Link to={`/projects/${projectId}/reviews`} className={navItemClass(`/projects/${projectId}/reviews`)}>
-                <MessageSquareHeart size={18} />
-                <span>Customer Reviews</span>
               </Link>
               <Link to={`/projects/${projectId}/intelligence`} className={navItemClass(`/projects/${projectId}/intelligence`)}>
                 <Sparkles size={18} />
