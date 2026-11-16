@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { useToast } from '../context/ToastContext';
 import { getAnalyticsSummary } from '../api';
@@ -7,7 +7,7 @@ import type { AnalyticsSummaryResponse, DetailedTopicGap, DetailedKeywordGap, De
 import {
   Target,
   Wand2,
-  Sparkles,
+  // Sparkles, // Temporarily hidden: Combined Intelligence Engine
   TrendingUp,
   Layers,
   Key,
@@ -104,10 +104,12 @@ const ProjectStrategy: React.FC = () => {
             <RefreshCw size={15} />
             <span>Refresh</span>
           </button>
+          {/* Temporarily hidden: Combined Intelligence Engine
           <Link to={`/projects/${projectId}/intelligence`} className="primary-btn" style={{ textDecoration: 'none' }}>
             <Sparkles size={15} />
             <span>Combined Intelligence →</span>
           </Link>
+          */}
         </div>
       </header>
 

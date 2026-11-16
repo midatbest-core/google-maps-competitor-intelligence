@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from typing import List
+from datetime import datetime, timezone
 import logging
 
 from app.schemas.generation import GenerationRequest, RegenerateRequest, GeneratedContentResponse
@@ -14,10 +15,17 @@ logger = logging.getLogger(__name__)
 
 async def _enqueue_generation_jobs(contents, service: GenerationService, background_tasks: BackgroundTasks = None) -> None:
     enqueued = False
+    now = datetime.now(timezone.utc)
     try:
         pool = await get_redis_pool()
         for gc in contents:
-            await pool.enqueue_job("generate_content_job", gc.id)
+            job_id = f"gen_{gc.id}_{int(now.timestamp())}"
+            await pool.enqueue_job("generate_content_job", gc.id, _job_id=job_id)
+            updated_context = dict(gc.source_context or {})
+            updated_context["job_id"] = job_id
+            updated_context["dispatched_at"] = now.isoformat()
+            gc.source_context = updated_context
+        service.db.commit()
         await pool.close()
         enqueued = True
     except Exception as exc:
@@ -31,7 +39,12 @@ async def _enqueue_generation_jobs(contents, service: GenerationService, backgro
 
     if not enqueued and background_tasks is not None:
         for content in contents:
+            updated_context = dict(content.source_context or {})
+            updated_context["dispatched_at"] = now.isoformat()
+            updated_context["dispatch_mode"] = "background_task"
+            content.source_context = updated_context
             background_tasks.add_task(generate_content_job, None, content.id)
+        service.db.commit()
 
 @generation_router.post("/projects/{project_id}/content/generate", response_model=List[GeneratedContentResponse], status_code=status.HTTP_201_CREATED)
 async def start_generation(
@@ -72,6 +85,33 @@ async def regenerate_content(
         
     await _enqueue_generation_jobs([gc], service, background_tasks)
         
+    return gc
+
+@generation_router.post("/projects/{project_id}/content/{content_id}/retry", response_model=GeneratedContentResponse)
+async def retry_content_generation(
+    project_id: str,
+    content_id: str,
+    background_tasks: BackgroundTasks = None,
+    service: GenerationService = Depends(get_generation_service)
+):
+    if isinstance(background_tasks, GenerationService):
+        service = background_tasks
+        background_tasks = None
+
+    try:
+        gc = service.retry_generation(project_id, content_id)
+    except ValueError as e:
+        detail = str(e)
+        if "already succeeded" in detail:
+            raise HTTPException(status_code=400, detail=detail)
+        elif "already in progress" in detail:
+            raise HTTPException(status_code=409, detail=detail)
+        elif "not found" in detail.lower():
+            raise HTTPException(status_code=404, detail=detail)
+        raise HTTPException(status_code=400, detail=detail)
+
+    await _enqueue_generation_jobs([gc], service, background_tasks)
+
     return gc
 
 @generation_router.get("/projects/{project_id}/content", response_model=List[GeneratedContentResponse])

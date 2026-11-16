@@ -21,7 +21,7 @@ import {
   Clock,
   ArrowRight,
   FileText,
-  Sparkles,
+  // Sparkles, // Temporarily hidden: Combined Intelligence Engine
   Info,
   ShieldAlert,
   Users
@@ -698,6 +698,7 @@ const ProjectScraping: React.FC = () => {
                       <FileText size={15} />
                       <span>View Posts</span>
                     </Link>
+                    {/* Temporarily hidden: Combined Intelligence Engine
                     <Link
                       to={`/projects/${projectId}/intelligence`}
                       className="primary-btn"
@@ -705,6 +706,7 @@ const ProjectScraping: React.FC = () => {
                       <Sparkles size={15} />
                       <span>Synthesize Combined Intel</span>
                     </Link>
+                    */}
                   </div>
                 )}
 

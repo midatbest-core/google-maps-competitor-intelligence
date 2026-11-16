@@ -467,3 +467,465 @@ async def test_create_content_workflow_mode(db: Session, generation_service):
     assert gc.prompt_version == "v3-marketing-intelligence"
     assert gc.full_copy is not None
 
+
+@pytest.mark.asyncio
+async def test_generation_timeout_transitions_to_failed(db: Session, generation_service):
+    """
+    Verifies that slow AI generation that exceeds the timeout is caught
+    and transitions the database record to FAILED with a timeout message.
+    """
+    import asyncio
+
+    p = Project(name="Timeout Project")
+    db.add(p)
+    db.commit()
+
+    gc = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        topic="Slow Topic",
+        status="QUEUED"
+    )
+    db.add(gc)
+    db.commit()
+
+    async def hanging_generate(*args, **kwargs):
+        await asyncio.sleep(2.0)
+        return '{"body": "never returned"}', {}
+
+    generation_service.ai_provider.generate_content = hanging_generate
+
+    # Execute with a 0.1s timeout
+    await generation_service.execute_generation(gc.id, timeout_seconds=0.1)
+
+    db.refresh(gc)
+    assert gc.status == "FAILED"
+    assert "timed out after" in gc.error_message
+
+
+def test_reconcile_stale_generations(db: Session):
+    """
+    Verifies that reconciliation distinguishes between:
+    - Never dispatched jobs (> 5m) -> FAILED
+    - Dispatched jobs legitimately queued -> Preserved as QUEUED (not failed on 10m timer)
+    - Stale RUNNING jobs (> 5m execution) -> FAILED
+    - Fresh RUNNING jobs (< 5m execution) -> Preserved as RUNNING
+    """
+    from datetime import datetime, timezone, timedelta
+
+    p = Project(name="Stale Project")
+    db.add(p)
+    db.commit()
+
+    now = datetime.now(timezone.utc)
+    fifteen_mins_ago = now - timedelta(minutes=15)
+    six_mins_ago = now - timedelta(minutes=6)
+    thirty_secs_ago = now - timedelta(seconds=30)
+
+    # 1. Never dispatched queued job (6 mins old, no dispatched_at) -> Should fail
+    never_dispatched = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        status="QUEUED",
+        created_at=six_mins_ago,
+        source_context={}
+    )
+    # 2. Legitimately dispatched queued job (15 mins old, dispatched_at set) -> Must stay QUEUED
+    legit_queued = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        status="QUEUED",
+        created_at=fifteen_mins_ago,
+        source_context={"dispatched_at": fifteen_mins_ago.isoformat()}
+    )
+    # 3. Worker crashed while RUNNING (started 6 mins ago, execution limit 120s) -> Should fail
+    crashed_running = GeneratedContent(
+        project_id=p.id,
+        generation_type="FULL",
+        status="RUNNING",
+        created_at=fifteen_mins_ago,
+        source_context={"started_at": six_mins_ago.isoformat()}
+    )
+    # 4. Fresh actively running job (started 30s ago) -> Must stay RUNNING
+    active_running = GeneratedContent(
+        project_id=p.id,
+        generation_type="FULL",
+        status="RUNNING",
+        created_at=fifteen_mins_ago,
+        source_context={"started_at": thirty_secs_ago.isoformat()}
+    )
+    db.add_all([never_dispatched, legit_queued, crashed_running, active_running])
+    db.commit()
+
+    reconciled = GenerationService.reconcile_stale_generations(db)
+    assert reconciled == 2
+
+    db.refresh(never_dispatched)
+    db.refresh(legit_queued)
+    db.refresh(crashed_running)
+    db.refresh(active_running)
+
+    assert never_dispatched.status == "FAILED"
+    assert "never dispatched" in never_dispatched.error_message
+
+    assert legit_queued.status == "QUEUED"
+    assert legit_queued.error_message is None
+
+    assert crashed_running.status == "FAILED"
+    assert "interrupted or exceeded execution limit" in crashed_running.error_message
+
+    assert active_running.status == "RUNNING"
+    assert active_running.error_message is None
+
+
+def test_list_and_get_proactive_reconciliation(db: Session, generation_service):
+    """
+    Verifies that get_generated_content and list_generated_content proactively
+    reconcile genuine stale items without failing legitimately queued items.
+    """
+    from datetime import datetime, timezone, timedelta
+
+    p = Project(name="Proactive Project")
+    db.add(p)
+    db.commit()
+
+    old_time = datetime.now(timezone.utc) - timedelta(hours=2)
+    # Never dispatched stale item
+    stale_item = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        status="QUEUED",
+        created_at=old_time,
+        source_context={}
+    )
+    # Legitimately queued item waiting 12 minutes (max_jobs=1 prior scrape running)
+    twelve_mins_ago = datetime.now(timezone.utc) - timedelta(minutes=12)
+    legit_item = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        status="QUEUED",
+        created_at=twelve_mins_ago,
+        source_context={"dispatched_at": twelve_mins_ago.isoformat()}
+    )
+    db.add_all([stale_item, legit_item])
+    db.commit()
+
+    # Proactive get on stale never-dispatched item
+    retrieved_stale = generation_service.get_generated_content(p.id, stale_item.id)
+    assert retrieved_stale.status == "FAILED"
+    assert "never dispatched" in retrieved_stale.error_message
+
+    # Proactive get on legitimately queued item (must NOT fail)
+    retrieved_legit = generation_service.get_generated_content(p.id, legit_item.id)
+    assert retrieved_legit.status == "QUEUED"
+
+
+def test_retry_generation_resets_failed_item(db: Session, generation_service):
+    """
+    Verifies that retry_generation resets a FAILED item to QUEUED,
+    clears error_message, preserves item ID, and does not duplicate records.
+    """
+    p = Project(name="Retry Project")
+    db.add(p)
+    db.commit()
+
+    gc = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        topic="Retryable Topic",
+        status="FAILED",
+        error_message="Previous failure"
+    )
+    db.add(gc)
+    db.commit()
+
+    initial_id = gc.id
+    retried = generation_service.retry_generation(p.id, gc.id)
+
+    assert retried.id == initial_id
+    assert retried.status == "QUEUED"
+    assert retried.error_message is None
+
+    # Verify no duplicate was created
+    all_items = db.query(GeneratedContent).filter_by(project_id=p.id).all()
+    assert len(all_items) == 1
+
+
+@pytest.mark.asyncio
+async def test_worker_generate_content_job_error_handling(db: Session, monkeypatch):
+    """
+    Verifies that generate_content_job catches unhandled worker exceptions
+    and updates the database record to FAILED with error_message.
+    """
+    from unittest.mock import MagicMock
+    from app.workers.main import generate_content_job
+
+    p = Project(name="Worker Error Project")
+    db.add(p)
+    db.commit()
+
+    gc = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        status="QUEUED"
+    )
+    db.add(gc)
+    db.commit()
+
+    # Monkeypatch execute_generation to raise an unexpected runtime error
+    async def mock_fail_execute(*args, **kwargs):
+        raise RuntimeError("Simulated worker crash / out-of-memory error")
+
+    monkeypatch.setattr(
+        "app.services.generation_service.GenerationService.execute_generation",
+        mock_fail_execute
+    )
+    worker_db = MagicMock(wraps=db)
+    worker_db.close = MagicMock()
+    worker_db.rollback = MagicMock()
+    monkeypatch.setattr("app.workers.main.SessionLocal", lambda: worker_db)
+
+    await generate_content_job(None, gc.id)
+
+    db.refresh(gc)
+    assert gc.status == "FAILED"
+    assert "Simulated worker crash" in gc.error_message
+
+
+@pytest.mark.asyncio
+async def test_worker_generate_content_job_provider_failure(db: Session, monkeypatch):
+    """
+    Verifies that if get_ai_provider fails during worker execution,
+    the record is still cleanly marked FAILED.
+    """
+    from app.workers.main import generate_content_job
+
+    class NonClosingSession:
+        def __init__(self, s):
+            self._s = s
+        def close(self):
+            pass
+        def __getattr__(self, item):
+            return getattr(self._s, item)
+
+    p = Project(name="Provider Error Project")
+    db.add(p)
+    db.commit()
+
+    gc = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        status="QUEUED"
+    )
+    db.add(gc)
+    db.commit()
+
+    def mock_bad_provider():
+        raise ValueError("Invalid GEMINI_API_KEY")
+
+    monkeypatch.setattr("app.providers.ai.factory.get_ai_provider", mock_bad_provider)
+    monkeypatch.setattr("app.workers.main.SessionLocal", lambda: NonClosingSession(db))
+
+    await generate_content_job(None, gc.id)
+
+    db.refresh(gc)
+    assert gc.status == "FAILED"
+    assert "Invalid GEMINI_API_KEY" in gc.error_message
+
+
+@pytest.mark.asyncio
+async def test_retry_content_generation_endpoint(db: Session, generation_service, monkeypatch):
+    """
+    Verifies that POST /projects/{project_id}/content/{content_id}/retry
+    resets a failed item to QUEUED, preserves its ID, and enqueues the worker job.
+    """
+    from app.api.generation import retry_content_generation
+    from unittest.mock import AsyncMock
+
+    p = Project(name="API Retry Project")
+    db.add(p)
+    db.commit()
+
+    gc = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        topic="Retry API Topic",
+        status="FAILED",
+        error_message="Previous failure"
+    )
+    db.add(gc)
+    db.commit()
+
+    mock_pool = AsyncMock()
+    mock_pool.enqueue_job = AsyncMock()
+    mock_pool.close = AsyncMock()
+
+    monkeypatch.setattr("app.api.generation.get_redis_pool", AsyncMock(return_value=mock_pool))
+
+    res = await retry_content_generation(
+        project_id=p.id,
+        content_id=gc.id,
+        service=generation_service
+    )
+
+    assert res.id == gc.id
+    assert res.status == "QUEUED"
+    assert res.error_message is None
+    assert mock_pool.enqueue_job.await_count == 1
+
+
+def test_reconciliation_preserves_job_completing_immediately_before(db: Session):
+    """
+    Verifies that a job that completed successfully immediately before reconciliation
+    runs is NOT overwritten or marked FAILED.
+    """
+    from datetime import datetime, timezone, timedelta
+
+    p = Project(name="Completed Before Reconcile")
+    db.add(p)
+    db.commit()
+
+    twenty_mins_ago = datetime.now(timezone.utc) - timedelta(minutes=20)
+    completed_gc = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        status="SUCCESS",
+        generated_idea="Freshly completed content",
+        created_at=twenty_mins_ago,
+        source_context={"started_at": twenty_mins_ago.isoformat()}
+    )
+    db.add(completed_gc)
+    db.commit()
+
+    reconciled = GenerationService.reconcile_stale_generations(db)
+    assert reconciled == 0
+
+    db.refresh(completed_gc)
+    assert completed_gc.status == "SUCCESS"
+    assert completed_gc.error_message is None
+
+
+def test_retry_concurrent_requests_atomic_prevention(db: Session, generation_service):
+    """
+    Verifies that when two simultaneous retry requests arrive for the same record:
+    1. The first request atomically claims and transitions to QUEUED.
+    2. The second request is rejected (already in progress).
+    3. Exactly one transition occurs without duplicates.
+    """
+    p = Project(name="Concurrent Retry Project")
+    db.add(p)
+    db.commit()
+
+    gc = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        status="FAILED",
+        error_message="Worker error"
+    )
+    db.add(gc)
+    db.commit()
+
+    # Request 1: succeeds
+    retried_1 = generation_service.retry_generation(p.id, gc.id)
+    assert retried_1.status == "QUEUED"
+
+    # Request 2 (simultaneous): must raise ValueError because row is already QUEUED
+    with pytest.raises(ValueError, match="already in progress"):
+        generation_service.retry_generation(p.id, gc.id)
+
+    # Verify no duplicates
+    all_rows = db.query(GeneratedContent).filter_by(project_id=p.id).all()
+    assert len(all_rows) == 1
+    assert all_rows[0].status == "QUEUED"
+
+
+def test_retry_cannot_overwrite_successful_result(db: Session, generation_service):
+    """
+    Verifies that retry_generation cannot overwrite a successful result.
+    """
+    p = Project(name="Successful Result Protection")
+    db.add(p)
+    db.commit()
+
+    gc = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        status="SUCCESS",
+        generated_idea="Valuable generated post"
+    )
+    db.add(gc)
+    db.commit()
+
+    with pytest.raises(ValueError, match="already succeeded"):
+        generation_service.retry_generation(p.id, gc.id)
+
+    db.refresh(gc)
+    assert gc.status == "SUCCESS"
+    assert gc.generated_idea == "Valuable generated post"
+
+
+@pytest.mark.asyncio
+async def test_worker_restart_while_job_actively_processing(db: Session):
+    """
+    Verifies that a worker or API restart does NOT fail a job that is actively
+    being processed by another worker (e.g. started 30 seconds ago).
+    """
+    from datetime import datetime, timezone, timedelta
+
+    p = Project(name="Active Processing Safety")
+    db.add(p)
+    db.commit()
+
+    now = datetime.now(timezone.utc)
+    started_recent = now - timedelta(seconds=25)
+    active_gc = GeneratedContent(
+        project_id=p.id,
+        generation_type="FULL",
+        status="RUNNING",
+        created_at=now - timedelta(minutes=10),
+        source_context={"started_at": started_recent.isoformat(), "heartbeat_at": started_recent.isoformat()}
+    )
+    db.add(active_gc)
+    db.commit()
+
+    # Startup reconciliation executes
+    reconciled = GenerationService.reconcile_stale_generations(db)
+    assert reconciled == 0
+
+    db.refresh(active_gc)
+    assert active_gc.status == "RUNNING"
+    assert active_gc.error_message is None
+
+
+def test_dispatched_job_waiting_45_minutes_remains_queued(db: Session):
+    """
+    Regression test: Verifies that when max_jobs=1 workers are occupied by multiple
+    long-running scrape jobs, a legitimately dispatched generation job waiting 45 minutes
+    remains in QUEUED status and is NOT prematurely failed.
+    """
+    from datetime import datetime, timezone, timedelta
+
+    p = Project(name="Long Queue Wait Project")
+    db.add(p)
+    db.commit()
+
+    now = datetime.now(timezone.utc)
+    forty_five_mins_ago = now - timedelta(minutes=45)
+
+    dispatched_gc = GeneratedContent(
+        project_id=p.id,
+        generation_type="IDEA",
+        status="QUEUED",
+        created_at=forty_five_mins_ago,
+        source_context={"dispatched_at": forty_five_mins_ago.isoformat()}
+    )
+    db.add(dispatched_gc)
+    db.commit()
+
+    reconciled = GenerationService.reconcile_stale_generations(db)
+    assert reconciled == 0
+
+    db.refresh(dispatched_gc)
+    assert dispatched_gc.status == "QUEUED"
+    assert dispatched_gc.error_message is None
+

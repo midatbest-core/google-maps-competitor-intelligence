@@ -7,7 +7,7 @@ import {
   Users,
   Database,
   FileText,
-  Sparkles,
+  // Sparkles, // Temporarily hidden: Combined Intelligence Engine
   Target,
   Wand2,
   RefreshCw
@@ -223,6 +223,7 @@ const ProjectDashboard = () => {
             </div>
           </Link>
 
+          {/* Temporarily hidden: Combined Intelligence Engine
           <Link to={`/projects/${projectId}/intelligence`} className="module-card">
             <div className="module-card-icon" style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#a855f7' }}>
               <Sparkles size={22} />
@@ -236,6 +237,7 @@ const ProjectDashboard = () => {
               <span className="module-link-arrow">Open Combined Intel &rarr;</span>
             </div>
           </Link>
+          */}
 
           <Link to={`/projects/${projectId}/strategy`} className="module-card">
             <div className="module-card-icon" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b' }}>

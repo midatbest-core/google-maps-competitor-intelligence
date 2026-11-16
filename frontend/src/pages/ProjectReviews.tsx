@@ -90,9 +90,11 @@ const ProjectReviews: React.FC = () => {
             <h2>Customer Reviews & Feedback</h2>
             <p className="subtitle">Real Google Maps customer feedback and competitor complaints ({total} total)</p>
           </div>
+          {/* Temporarily hidden: Combined Intelligence Engine
           <Link to={`/projects/${projectId}/intelligence`} className="btn-primary" style={{ textDecoration: 'none' }}>
             View Combined Intelligence →
           </Link>
+          */}
         </div>
 
         {/* Filters Toolbar */}

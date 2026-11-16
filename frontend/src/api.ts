@@ -317,6 +317,7 @@ export interface GeneratedContentResponse {
 
 export const startGeneration = (projectId: string, data: GenerationRequest) => api.post<GeneratedContentResponse[]>(`/projects/${projectId}/content/generate`, data);
 export const regenerateContent = (projectId: string, contentId: string, data: RegenerateRequest) => api.post<GeneratedContentResponse>(`/projects/${projectId}/content/${contentId}/regenerate`, data);
+export const retryGeneration = (projectId: string, contentId: string) => api.post<GeneratedContentResponse>(`/projects/${projectId}/content/${contentId}/retry`);
 export const getGenerations = (projectId: string, skip = 0, limit = 50) => api.get<GeneratedContentResponse[]>(`/projects/${projectId}/content`, { params: { skip, limit } });
 export const getGeneration = (projectId: string, contentId: string) => api.get<GeneratedContentResponse>(`/projects/${projectId}/content/${contentId}`);
 export interface GenerationPostSource { id: string; business_name: string; date?: string; summary: string; topic?: string; content_type?: string; }

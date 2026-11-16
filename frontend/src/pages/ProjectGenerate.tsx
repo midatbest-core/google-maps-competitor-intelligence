@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { useToast } from '../context/ToastContext';
-import { startGeneration, regenerateContent, getGeneration, getGenerations, getGenerationPostSources } from '../api';
+import { startGeneration, regenerateContent, retryGeneration, getGeneration, getGenerations, getGenerationPostSources } from '../api';
 import type { GenerationRequest, GeneratedContentResponse, GenerationPostSource } from '../api';
 import {
   Wand2,
@@ -38,6 +38,7 @@ const ProjectGenerate: React.FC = () => {
 
   // UI State
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -125,6 +126,21 @@ const ProjectGenerate: React.FC = () => {
       const msg = err.response?.data?.detail || 'Failed to regenerate content';
       setError(msg);
       showToast(msg, 'error');
+    }
+  };
+
+  const handleRetry = async (contentId: string) => {
+    setRetryingId(contentId);
+    try {
+      showToast('Retrying generation...', 'info');
+      const res = await retryGeneration(projectId!, contentId);
+      setGenerations(generations.map(g => g.id === contentId ? res.data : g));
+    } catch (err: any) {
+      const msg = err.response?.data?.detail || 'Failed to retry generation';
+      setError(msg);
+      showToast(msg, 'error');
+    } finally {
+      setRetryingId(null);
     }
   };
 
@@ -322,8 +338,21 @@ const ProjectGenerate: React.FC = () => {
 
                       {gen.status === 'FAILED' && (
                         <div className="gen-error-box">
-                          <AlertCircle size={16} />
-                          <span>{gen.error_message || 'Generation failed'}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <AlertCircle size={16} />
+                            <span>{gen.error_message || 'Generation failed'}</span>
+                          </div>
+                          <div className="gen-actions-bar" style={{ marginTop: '8px' }}>
+                            <button
+                              type="button"
+                              className="secondary-btn"
+                              disabled={retryingId === gen.id}
+                              onClick={() => handleRetry(gen.id)}
+                            >
+                              <RotateCw size={14} className={retryingId === gen.id ? 'animate-spin' : ''} />
+                              <span>{retryingId === gen.id ? 'Retrying...' : 'Retry Generation'}</span>
+                            </button>
+                          </div>
                         </div>
                       )}
 

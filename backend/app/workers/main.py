@@ -335,15 +335,44 @@ async def generate_content_job(ctx, content_id: str):
         from app.services.generation_service import GenerationService
         from app.providers.ai.factory import get_ai_provider
         from app.providers.embedding.factory import get_embedding_provider
+        from app.models.analysis import GeneratedContent
 
-        ai_provider = get_ai_provider()
-        emb_provider = get_embedding_provider()
+        gc = db.query(GeneratedContent).filter_by(id=content_id).first()
+        if not gc:
+            logger.warning(f"Content {content_id} not found in database")
+            return
+        if gc.status == "SUCCESS":
+            logger.info(f"Content {content_id} already SUCCESS, skipping execution")
+            return
+
+        try:
+            ai_provider = get_ai_provider()
+            emb_provider = get_embedding_provider()
+        except Exception as prov_err:
+            logger.error(f"Failed to initialize AI/Embedding provider for content {content_id}: {prov_err}")
+            if gc and gc.status in ("QUEUED", "RUNNING"):
+                gc.status = "FAILED"
+                gc.error_message = f"AI Provider configuration error: {prov_err}"
+                db.commit()
+            return
+
         service = GenerationService(db, ai_provider, emb_provider)
         await service.execute_generation(content_id)
 
-    except Exception as e:
+    except (Exception, asyncio.CancelledError) as e:
         logger.exception(f"Error in generation job for content {content_id}")
-        db.rollback()
+        try:
+            db.rollback()
+            from app.models.analysis import GeneratedContent
+            gc = db.query(GeneratedContent).filter_by(id=content_id).first()
+            if gc and gc.status != "SUCCESS":
+                gc.status = "FAILED"
+                gc.error_message = f"Worker generation failure: {str(e) or type(e).__name__}"
+                db.commit()
+        except Exception as recovery_err:
+            logger.error(f"Failed to record failure status for content {content_id}: {recovery_err}")
+        if isinstance(e, asyncio.CancelledError):
+            raise
     finally:
         db.close()
 
@@ -442,6 +471,15 @@ async def scheduler_tick(ctx):
             cleanup_dispatched_outbox_messages(db, older_than_days=30)
         except Exception as oe:
             logger.error(f"[SchedulerTick] Error processing outbox messages: {oe}")
+
+        # Reconcile stale generation jobs safely (using separate execution vs queue wait checks)
+        try:
+            from app.services.generation_service import GenerationService
+            reconciled_gens = GenerationService.reconcile_stale_generations(db)
+            if reconciled_gens > 0:
+                logger.info(f"[SchedulerTick] Reconciled {reconciled_gens} stale generation jobs to FAILED")
+        except Exception as ge:
+            logger.error(f"[SchedulerTick] Error reconciling stale generation jobs: {ge}")
 
     except Exception as e:
         logger.exception("Error in scheduler_tick")

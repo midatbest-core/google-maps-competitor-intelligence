@@ -1,9 +1,10 @@
 import logging
 import json
+import asyncio
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, update
 from typing import Optional, List, Dict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import hashlib
 
 from app.models.analysis import GeneratedContent, AIAnalysis, PostEmbedding, IntelligenceReport
@@ -115,11 +116,147 @@ class GenerationService:
         gc = self.db.query(GeneratedContent).filter_by(id=content_id, project_id=project_id).first()
         if not gc:
             raise ValueError("Content not found")
+        # Proactively reconcile genuine stale jobs for this project without failing legitimately queued items
+        if gc.status in ("QUEUED", "RUNNING"):
+            self.reconcile_stale_generations(self.db, project_id=project_id)
+            self.db.refresh(gc)
         return gc
         
     def list_generated_content(self, project_id: str, skip: int = 0, limit: int = 50) -> List[GeneratedContent]:
         self._verify_project(project_id)
+        # Proactively reconcile genuine stale jobs for this project
+        self.reconcile_stale_generations(self.db, project_id=project_id)
         return self.db.query(GeneratedContent).filter_by(project_id=project_id).order_by(GeneratedContent.created_at.desc()).offset(skip).limit(limit).all()
+
+    @staticmethod
+    def reconcile_stale_generations(
+        db: Session,
+        queued_undispatched_timeout: int | None = None,
+        running_timeout: int | None = None,
+        queued_max_wait: int | None = None,
+        project_id: str | None = None
+    ) -> int:
+        if queued_undispatched_timeout is None:
+            queued_undispatched_timeout = getattr(settings, "GENERATION_UNDISPATCHED_TIMEOUT_SECONDS", 300)
+        if running_timeout is None:
+            running_timeout = getattr(settings, "GENERATION_RUNNING_TIMEOUT_SECONDS", 300)
+        if queued_max_wait is None:
+            queued_max_wait = getattr(settings, "GENERATION_QUEUED_MAX_WAIT_SECONDS", 5400)
+
+        now = datetime.now(timezone.utc)
+        query = db.query(GeneratedContent).filter(
+            GeneratedContent.status.in_(["QUEUED", "RUNNING"])
+        )
+        if project_id:
+            query = query.filter(GeneratedContent.project_id == project_id)
+
+        candidates = query.all()
+        reconciled_count = 0
+
+        for item in candidates:
+            # Terminal state safety: never overwrite a job that succeeded
+            if item.status == "SUCCESS":
+                continue
+
+            ctx = item.source_context or {}
+            dispatched_at_str = ctx.get("dispatched_at")
+            started_at_str = ctx.get("started_at")
+            heartbeat_at_str = ctx.get("heartbeat_at")
+
+            created_at = item.created_at
+            if created_at and created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+
+            should_fail = False
+            fail_reason = ""
+
+            if item.status == "QUEUED":
+                if not dispatched_at_str:
+                    # Case A: Never dispatched. If older than queued_undispatched_timeout (5m), fail it.
+                    if created_at and (now - created_at).total_seconds() > queued_undispatched_timeout:
+                        should_fail = True
+                        fail_reason = "Generation request was never dispatched to worker queue. Please retry."
+                else:
+                    # Case B: Dispatched and waiting in queue.
+                    # Configurable through GENERATION_QUEUED_MAX_WAIT_SECONDS (default 90m / 5400s).
+                    # Legitimate jobs can wait > 30m when max_jobs=1 workers process multiple prior scrape runs.
+                    dispatched_at = None
+                    try:
+                        dispatched_at = datetime.fromisoformat(dispatched_at_str)
+                        if dispatched_at.tzinfo is None:
+                            dispatched_at = dispatched_at.replace(tzinfo=timezone.utc)
+                    except Exception:
+                        dispatched_at = created_at
+
+                    ref_time = dispatched_at or created_at
+                    if ref_time and (now - ref_time).total_seconds() > queued_max_wait:
+                        should_fail = True
+                        fail_reason = f"Generation queue wait time exceeded limit ({queued_max_wait // 60} minutes). Please retry."
+
+            elif item.status == "RUNNING":
+                # Case C & D: Running or crashed.
+                # Must use execution-specific timestamp (heartbeat_at or started_at), NOT created_at or queue timeout.
+                exec_time = None
+                for ts_str in (heartbeat_at_str, started_at_str):
+                    if ts_str:
+                        try:
+                            parsed_ts = datetime.fromisoformat(ts_str)
+                            if parsed_ts.tzinfo is None:
+                                parsed_ts = parsed_ts.replace(tzinfo=timezone.utc)
+                            exec_time = parsed_ts
+                            break
+                        except Exception:
+                            pass
+
+                if not exec_time:
+                    updated_at = item.updated_at
+                    if updated_at and updated_at.tzinfo is None:
+                        updated_at = updated_at.replace(tzinfo=timezone.utc)
+                    exec_time = updated_at or created_at
+
+                if exec_time and (now - exec_time).total_seconds() > running_timeout:
+                    should_fail = True
+                    fail_reason = "Generation worker process was interrupted or exceeded execution limit. Please retry."
+
+            if should_fail:
+                item.status = "FAILED"
+                item.error_message = fail_reason
+                reconciled_count += 1
+
+        if reconciled_count > 0:
+            db.commit()
+            logger.warning(f"Reconciled {reconciled_count} stale generation(s)")
+
+        return reconciled_count
+
+    def retry_generation(self, project_id: str, content_id: str) -> GeneratedContent:
+        self._verify_project(project_id)
+
+        # Atomic conditional update: only transition from terminal failed states
+        stmt = (
+            update(GeneratedContent)
+            .where(GeneratedContent.id == content_id)
+            .where(GeneratedContent.project_id == project_id)
+            .where(GeneratedContent.status.in_(["FAILED", "REJECTED_DUPLICATE"]))
+            .values(
+                status="QUEUED",
+                error_message=None,
+            )
+        )
+        result = self.db.execute(stmt)
+        self.db.commit()
+
+        if result.rowcount == 0:
+            gc = self.db.query(GeneratedContent).filter_by(id=content_id, project_id=project_id).first()
+            if not gc:
+                raise ValueError("Content not found")
+            if gc.status == "SUCCESS":
+                raise ValueError("Content generation has already succeeded")
+            if gc.status in ("QUEUED", "RUNNING"):
+                raise ValueError("Content generation is already in progress")
+            raise ValueError(f"Cannot retry content in state {gc.status}")
+
+        return self.db.query(GeneratedContent).filter_by(id=content_id, project_id=project_id).first()
 
     def mark_enqueue_failed(self, content_ids: list[str]) -> None:
         if not content_ids:
@@ -136,11 +273,21 @@ class GenerationService:
         )
         self.db.commit()
 
-    async def execute_generation(self, content_id: str):
+    async def execute_generation(self, content_id: str, timeout_seconds: int = 120):
         gc = self.db.query(GeneratedContent).filter_by(id=content_id).first()
         if not gc:
             return
             
+        # Terminal state safety: never re-execute a job that has already succeeded
+        if gc.status == "SUCCESS":
+            logger.info(f"Content {content_id} already SUCCESS, skipping execution")
+            return
+
+        now = datetime.now(timezone.utc)
+        updated_context = dict(gc.source_context or {})
+        updated_context["started_at"] = now.isoformat()
+        updated_context["heartbeat_at"] = now.isoformat()
+        gc.source_context = updated_context
         gc.status = "RUNNING"
         self.db.commit()
         
@@ -180,8 +327,11 @@ class GenerationService:
                     campaign_context=campaign
                 )
                 
-            # 3. Call AI
-            raw_text, raw_dict = await self.ai_provider.generate_content(prompt)
+            # 3. Call AI with timeout
+            raw_text, raw_dict = await asyncio.wait_for(
+                self.ai_provider.generate_content(prompt),
+                timeout=timeout_seconds
+            )
             
             # 4. Parse JSON Output
             parsed_data = self._parse_json(raw_text, gc.generation_type)
@@ -228,7 +378,10 @@ class GenerationService:
                 is_duplicate = False
                 if self.embedding_provider and candidate_text:
                     try:
-                        embedding = await self.embedding_provider.generate_embedding(candidate_text)
+                        embedding = await asyncio.wait_for(
+                            self.embedding_provider.generate_embedding(candidate_text),
+                            timeout=30.0
+                        )
                         gc.embedding = embedding
                         if self._is_semantic_duplicate(gc.project_id, embedding, gc.id):
                             is_duplicate = True
@@ -239,11 +392,26 @@ class GenerationService:
                         
                 if not is_duplicate:
                     gc.status = "SUCCESS"
+                    gc.error_message = None
+                    updated_context = dict(gc.source_context or {})
+                    updated_context["completed_at"] = datetime.now(timezone.utc).isoformat()
+                    gc.source_context = updated_context
             
+        except asyncio.TimeoutError:
+            logger.error(f"Generation timed out after {timeout_seconds}s for content {content_id}")
+            gc.status = "FAILED"
+            gc.error_message = f"Generation timed out after {timeout_seconds} seconds. Please retry."
         except Exception as e:
             logger.exception("Generation failed")
             gc.status = "FAILED"
             gc.error_message = str(e)
+        except BaseException as be:
+            logger.exception(f"Interrupted or cancelled generation for content {content_id}")
+            if gc.status != "SUCCESS":
+                gc.status = "FAILED"
+                gc.error_message = f"Generation was cancelled or interrupted: {type(be).__name__}"
+                self.db.commit()
+            raise
             
         self.db.commit()
 

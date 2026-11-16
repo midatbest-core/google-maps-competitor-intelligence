@@ -66,6 +66,15 @@ async def on_startup():
             recovered = await dispatcher.dispatch_pending(db, limit=50)
             if recovered > 0:
                 logger.info(f"Startup outbox recovery: dispatched {recovered} pending messages.")
+
+            # Reconcile genuinely stale generation jobs on startup (using safe execution & dispatch checks)
+            try:
+                from app.services.generation_service import GenerationService
+                reconciled = GenerationService.reconcile_stale_generations(db)
+                if reconciled > 0:
+                    logger.info(f"Startup generation recovery: reconciled {reconciled} stale generation jobs.")
+            except Exception as ge:
+                logger.warning(f"Startup generation recovery warning: {ge}")
         finally:
             db.close()
     except Exception as e:

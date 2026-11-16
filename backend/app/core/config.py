@@ -63,6 +63,9 @@ class Settings(BaseSettings):
     GENERATION_MAX_PROJECT_EXAMPLES: int = 5
     GENERATION_MAX_GAPS: int = 10
     GENERATION_MAX_GENERATED_HISTORY: int = 5
+    GENERATION_QUEUED_MAX_WAIT_SECONDS: int = 5400  # 90 minutes default for dispatched queued jobs
+    GENERATION_UNDISPATCHED_TIMEOUT_SECONDS: int = 300  # 5 minutes for undispatched jobs
+    GENERATION_RUNNING_TIMEOUT_SECONDS: int = 300  # 5 minutes for running jobs
 
     @model_validator(mode="after")
     def validate_production_configuration(self):

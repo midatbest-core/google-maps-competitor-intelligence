@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { getProjectPosts, getAnalyticsSummary, getProjectCompetitors } from '../api';
 import type { Competitor, PostResponse, AnalyticsSummaryResponse, TopicFrequency, KeywordFrequency, DetailedTopicGap } from '../api';
@@ -146,11 +146,13 @@ const ProjectPosts: React.FC = () => {
             <h2 style={{margin:0}}>Posts Repository</h2>
             <span className="post-count-badge">{total} posts found</span>
           </div>
+          {/* Temporarily hidden: Combined Intelligence link
           <div style={{ display: 'flex', gap: '10px' }}>
             <Link to={`/projects/${projectId}/intelligence`} className="btn-primary" style={{ textDecoration: 'none', fontSize: '13px' }}>
               ⚡ Combined Intelligence →
             </Link>
           </div>
+          */}
         </div>
 
         <div className="filters-bar">

@@ -80,7 +80,7 @@ const ProjectGenerations: React.FC = () => {
                     </div>
                   ) : gen.status === 'FAILED' ? (
                     <div className="error-preview">
-                      Generation failed.
+                      {gen.error_message || 'Generation failed.'}
                     </div>
                   ) : (
                     <div className="processing-preview">
@@ -106,6 +106,11 @@ const ProjectGenerations: React.FC = () => {
                   {gen.status === 'REJECTED_DUPLICATE' && (
                     <Link to={`/projects/${projectId}/generate?regenerate=${gen.id}`} className="btn-secondary btn-sm">
                       Retry
+                    </Link>
+                  )}
+                  {gen.status === 'FAILED' && (
+                    <Link to={`/projects/${projectId}/generate`} className="btn-secondary btn-sm">
+                      Retry in Studio
                     </Link>
                   )}
                 </div>

@@ -7,7 +7,7 @@ import {
   Compass,
   Database,
   FileText,
-  Sparkles,
+  // Sparkles, // Temporarily hidden: Combined Intelligence Engine
   Target,
   Wand2,
   History,
@@ -159,10 +159,12 @@ const AppLayout = ({ children, projectId, projectName }: AppLayoutProps) => {
                 <FileText size={18} />
                 <span>Business Posts</span>
               </Link>
+              {/* Temporarily hidden: Combined Intelligence Engine
               <Link to={`/projects/${projectId}/intelligence`} className={navItemClass(`/projects/${projectId}/intelligence`)}>
                 <Sparkles size={18} />
                 <span>Combined Intel</span>
               </Link>
+              */}
               <Link to={`/projects/${projectId}/strategy`} className={navItemClass(`/projects/${projectId}/strategy`)}>
                 <Target size={18} />
                 <span>Content Strategy</span>
