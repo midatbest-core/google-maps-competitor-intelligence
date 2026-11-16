@@ -19,6 +19,12 @@ class ProjectRepository(BaseRepository[Project]):
         self.session.refresh(db_obj)
         return db_obj
 
-    def get_competitors(self, project_id: str) -> list[ProjectCompetitor]:
-        stmt = select(ProjectCompetitor).options(joinedload(ProjectCompetitor.business)).where(ProjectCompetitor.project_id == project_id)
+    def get_competitors(self, project_id: str, active_only: bool = True) -> list[ProjectCompetitor]:
+        stmt = (
+            select(ProjectCompetitor)
+            .options(joinedload(ProjectCompetitor.business))
+            .where(ProjectCompetitor.project_id == project_id)
+        )
+        if active_only:
+            stmt = stmt.where(ProjectCompetitor.is_active == True)
         return list(self.session.scalars(stmt))

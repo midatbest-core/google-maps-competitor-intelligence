@@ -8,6 +8,7 @@ from .analysis import AIAnalysis, GeneratedContent, PostEmbedding, IntelligenceR
 from .auth import User, Workspace, WorkspaceMember
 from .discovery import DiscoveryRun, DiscoveryCandidate
 from .review import Review, ReviewIntelligence
+from .outbox import OutboxMessage
 
 __all__ = [
     "Base",
@@ -31,4 +32,5 @@ __all__ = [
     "DiscoveryCandidate",
     "Review",
     "ReviewIntelligence",
+    "OutboxMessage",
 ]

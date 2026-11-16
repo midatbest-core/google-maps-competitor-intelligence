@@ -56,7 +56,8 @@
 }
 
 .generate-form input,
-.generate-form textarea {
+.generate-form textarea,
+.generate-form select {
   width: 100%;
   padding: 10px 14px;
   background: #090d18;
@@ -107,6 +108,24 @@
   color: white;
   font-weight: 600;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+.context-indicator, .selected-context {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: #c7d2fe;
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 12px;
+  margin: 0 0 16px;
+}
+
+.selected-context { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+@media (max-width: 520px) {
+  .mode-toggle { flex-direction: column; }
+  .mode-btn { min-height: 38px; }
+  .generator-card { padding: 16px; }
 }
 
 .submit-btn {
@@ -225,6 +244,8 @@
   white-space: pre-wrap;
   margin-bottom: 16px;
 }
+
+.generated-title { color: #e0e7ff; margin: 0 0 10px; font-size: 16px; }
 
 .content-meta-tags {
   display: flex;

@@ -407,3 +407,63 @@ async def test_enqueue_failure_marks_unsubmitted_content_failed(db, monkeypatch)
         for record in records
     )
 
+
+@pytest.mark.asyncio
+async def test_marketing_opportunities_workflow_and_context(db: Session, generation_service):
+    """
+    Verifies that MARKETING_OPPORTUNITIES workflow mode creates a marketing opportunity,
+    executes with v3-marketing-intelligence prompt version, and stores evidence in source_context.
+    """
+    p = Project(name="Marketing Opp Project")
+    db.add(p)
+    db.commit()
+
+    payload = GenerationRequest(
+        generation_type="IDEA",
+        workflow_mode="MARKETING_OPPORTUNITIES",
+        count=1
+    )
+    contents = generation_service.request_generation(p.id, payload)
+    assert len(contents) == 1
+    gc = contents[0]
+    assert gc.status == "QUEUED"
+    assert gc.source_context.get("workflow_mode") == "MARKETING_OPPORTUNITIES"
+
+    await generation_service.execute_generation(gc.id)
+    db.refresh(gc)
+    assert gc.status == "SUCCESS"
+    assert gc.prompt_version == "v3-marketing-intelligence"
+    assert gc.generated_idea is not None
+    assert "rationale" in gc.source_context
+    assert "evidence" in gc.source_context
+
+
+@pytest.mark.asyncio
+async def test_create_content_workflow_mode(db: Session, generation_service):
+    """
+    Verifies that CREATE_CONTENT workflow mode produces a FULL content draft
+    using v3-marketing-intelligence prompt version.
+    """
+    p = Project(name="Create Content Project")
+    db.add(p)
+    db.commit()
+
+    payload = GenerationRequest(
+        generation_type="FULL",
+        workflow_mode="CREATE_CONTENT",
+        topic="Seasonal Specials",
+        content_type="Offer"
+    )
+    contents = generation_service.request_generation(p.id, payload)
+    assert len(contents) == 1
+    gc = contents[0]
+    assert gc.status == "QUEUED"
+    assert gc.generation_type == "FULL"
+    assert gc.source_context.get("workflow_mode") == "CREATE_CONTENT"
+
+    await generation_service.execute_generation(gc.id)
+    db.refresh(gc)
+    assert gc.status == "SUCCESS"
+    assert gc.prompt_version == "v3-marketing-intelligence"
+    assert gc.full_copy is not None
+

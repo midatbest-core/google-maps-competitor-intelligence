@@ -18,8 +18,14 @@ if config.config_file_name is not None:
 from app.models import Base
 target_metadata = Base.metadata
 
+def get_url():
+    url = config.get_main_option("sqlalchemy.url")
+    if url and not url.startswith("driver://"):
+        return url
+    return os.getenv("DATABASE_URL")
+
 def run_migrations_offline() -> None:
-    url = os.getenv("DATABASE_URL")
+    url = get_url()
     if not url:
         raise ValueError("DATABASE_URL environment variable is required.")
     context.configure(
@@ -32,7 +38,7 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 def run_migrations_online() -> None:
-    url = os.getenv("DATABASE_URL")
+    url = get_url()
     if not url:
         raise ValueError("DATABASE_URL environment variable is required.")
     configuration = config.get_section(config.config_ini_section)

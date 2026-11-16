@@ -4,7 +4,8 @@ import asyncio
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from app.api.routes import health_router, project_router, scrape_router
 from app.api.analytics import analytics_router, intelligence_router
 from app.api.discovery import discovery_router
@@ -13,19 +14,32 @@ from app.api.auth import auth_router
 from app.core.logging import setup_logging
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+import logging
 
 setup_logging()
+logger = logging.getLogger("app.main")
 
 app = FastAPI(title="Google Maps Competitor Update Intelligence API")
 
-# Setup CORS
+# Setup CORS with explicit production & dev origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS if hasattr(settings, 'CORS_ORIGINS') else ["*"],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=600,
 )
+
+# Global unhandled exception handler to guarantee CORS headers on 500 responses
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception(f"Unhandled error on {request.method} {request.url.path}: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "An internal server error occurred"},
+    )
 
 app.include_router(health_router)
 app.include_router(auth_router)
@@ -39,6 +53,23 @@ app.include_router(generation_router)
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
+
+@app.on_event("startup")
+async def on_startup():
+    logger.info("Application starting up: recovering pending outbox dispatches...")
+    try:
+        from app.services.outbox_service import OutboxDispatcher
+        from app.core.database import SessionLocal
+        db = SessionLocal()
+        try:
+            dispatcher = OutboxDispatcher()
+            recovered = await dispatcher.dispatch_pending(db, limit=50)
+            if recovered > 0:
+                logger.info(f"Startup outbox recovery: dispatched {recovered} pending messages.")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning(f"Startup outbox recovery warning: {e}")
 
 # Serve built frontend assets in production / single-service deployments
 import os

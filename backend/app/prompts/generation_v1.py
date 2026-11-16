@@ -1,6 +1,16 @@
 import json
 
-PROMPT_VERSION = "v2-review-aware"
+PROMPT_VERSION = "v3-marketing-intelligence"
+
+OPPORTUNITIES_PROMPT_TEMPLATE = """
+You are a marketing intelligence analyst for a local business. Analyse the available project intelligence and produce one concise, actionable opportunity analysis. Use only evidence present in the context. Clearly mark unknowns and distinguish observations from recommendations. Never invent competitor behavior, engagement, performance, missing information, or business capabilities. If intelligence is insufficient, state that plainly and recommend collecting more relevant data.
+
+Business Context:\n{business_context}
+
+Project-wide Competitor and Business Intelligence:\n{intelligence_context}
+
+Return one valid JSON object with topic (opportunity title), title (short hook), body (include: observed competitor behavior, underused area, why it matters, recommended strategy, suggested content direction, format, hook and CTA), keywords (only supported relevant terms), cta, offer (null unless supported), image_concept, content_type, and rationale (cite evidence post IDs or gap counts when present; label recommendations as recommendations).
+"""
 
 IDEA_PROMPT_TEMPLATE = """
 You are an expert Google Maps marketing strategist.

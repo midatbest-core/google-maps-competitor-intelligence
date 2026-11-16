@@ -22,14 +22,17 @@ async def start_discovery(
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
         
+    enqueued = False
     try:
         pool = await get_redis_pool()
         await pool.enqueue_job("discovery_job", run.id)
         await pool.close()
+        enqueued = True
     except Exception:
         pass
-        
-    background_tasks.add_task(discovery_job, None, run.id)
+
+    if not enqueued:
+        background_tasks.add_task(discovery_job, None, run.id)
     return run
 
 @discovery_router.get("/projects/{project_id}/discovery-runs", response_model=List[DiscoveryRunResponse])
@@ -129,12 +132,15 @@ async def resume_discovery(project_id: str, run_id: str, background_tasks: Backg
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
         
+    enqueued = False
     try:
         pool = await get_redis_pool()
         await pool.enqueue_job("discovery_job", run.id)
         await pool.close()
+        enqueued = True
     except Exception:
         pass
 
-    background_tasks.add_task(discovery_job, None, run.id)
+    if not enqueued:
+        background_tasks.add_task(discovery_job, None, run.id)
     return run

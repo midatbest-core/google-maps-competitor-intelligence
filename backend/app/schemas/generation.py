@@ -4,12 +4,16 @@ from datetime import datetime
 
 class GenerationRequest(BaseModel):
     generation_type: str = Field(..., description="IDEA or FULL")
+    workflow_mode: Optional[str] = Field(None, description="MARKETING_OPPORTUNITIES or CREATE_CONTENT")
     count: int = Field(1, ge=1, le=5)
     topic: Optional[str] = None
     content_type: Optional[str] = None
     keywords: Optional[List[str]] = None
     cta_style: Optional[str] = None
     campaign_context: Optional[str] = None
+    context_type: Optional[str] = None
+    context_value: Optional[str] = None
+    context_generation_id: Optional[str] = None
     
 class RegenerateRequest(BaseModel):
     regeneration_reason: Optional[str] = None
@@ -37,6 +41,7 @@ class GeneratedContentResponse(BaseModel):
     
     parent_generation_id: Optional[str]
     regeneration_reason: Optional[str]
+    source_context: Optional[Dict[str, Any]] = None
 
     model_config = {"from_attributes": True}
 

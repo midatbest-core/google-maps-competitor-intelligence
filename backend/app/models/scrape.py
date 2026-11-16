@@ -26,6 +26,7 @@ class ScrapeRun(Base, TimestampMixin):
     run_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     start_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     end_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(50), default="QUEUED") # QUEUED, RUNNING, PARTIAL_SUCCESS, SUCCESS, FAILED
     
     # Aggregated Counters

@@ -2,6 +2,8 @@ from sqlalchemy.orm import Session
 from app.repositories.scrape_repo import ScrapeRunRepository, ScrapeRunCompetitorRepository
 from app.repositories.project_repo import ProjectRepository
 from app.models.scrape import ScrapeRun, ScrapeRunCompetitor
+from app.models.outbox import OutboxMessage
+from app.services.outbox_service import create_outbox_message
 from datetime import datetime, timezone
 from app.models.auth import Workspace
 import logging
@@ -53,25 +55,39 @@ class ScrapeService:
             r_created_at = r.created_at.replace(tzinfo=timezone.utc) if r.created_at.tzinfo is None else r.created_at
             time_since_creation = (now - r_created_at).total_seconds()
 
-            if r.status == "QUEUED" and time_since_creation > 300: # 5 mins stale
-                r.status = "FAILED"
-                r.error_logs = ["Marked as FAILED due to being stuck in QUEUED"]
-                r.end_time = now
-            elif r.status in ["RUNNING", "RETRYING"]:
-                r_start_time = r.start_time.replace(tzinfo=timezone.utc) if (r.start_time and r.start_time.tzinfo is None) else r.start_time
-                elapsed = (now - r_start_time).total_seconds() if r_start_time else time_since_creation
-                if elapsed > 900: # 15 mins stale timeout
+            if r.status == "QUEUED":
+                if time_since_creation > 300: # 5 mins stale
                     r.status = "FAILED"
-                    r.error_logs = ["Marked as FAILED due to worker timeout or interruption"]
+                    r.error_logs = ["Marked as FAILED due to being stuck in QUEUED"]
                     r.end_time = now
-                    # Also mark running competitor runs as FAILED
-                    for cr in r.competitor_runs:
-                        if cr.status == "RUNNING":
-                            cr.status = "FAILED"
-                            cr.error_message = "Worker process interrupted"
                 else:
-                    self.db.rollback()
-                    raise ValueError(f"Project already has an active run ({r.status})")
+                    active_status = r.status
+                    raise ValueError(f"Project already has an active run ({active_status})")
+            elif r.status in ["RUNNING", "RETRYING"]:
+                last_alive = r.heartbeat_at or r.start_time or r.created_at
+                last_alive_utc = last_alive.replace(tzinfo=timezone.utc) if (last_alive and last_alive.tzinfo is None) else last_alive
+                elapsed = (now - last_alive_utc).total_seconds() if last_alive_utc else time_since_creation
+                if elapsed > 300: # 5 mins heartbeat expiration timeout
+                    # Reconcile: If all competitors actually completed, mark SUCCESS instead of FAILED
+                    all_competitors = r.competitor_runs
+                    if all_competitors and all(cr.status in ("SUCCESS", "NO_DATA") for cr in all_competitors):
+                        r.status = "SUCCESS"
+                        r.end_time = now
+                        r.competitors_succeeded = len(all_competitors)
+                        r.competitors_failed = 0
+                    else:
+                        any_succeeded = any(cr.status in ("SUCCESS", "NO_DATA") for cr in (all_competitors or []))
+                        r.status = "PARTIAL_SUCCESS" if any_succeeded else "FAILED"
+                        r.error_logs = ["Marked as FAILED due to worker heartbeat expiration"]
+                        r.end_time = now
+                        # Also mark running competitor runs as FAILED
+                        for cr in (r.competitor_runs or []):
+                            if cr.status == "RUNNING":
+                                cr.status = "FAILED"
+                                cr.error_message = "Worker process interrupted"
+                else:
+                    active_status = r.status
+                    raise ValueError(f"Project already has an active run ({active_status})")
             elif time_since_creation > 600:
                 r.status = "FAILED"
                 r.end_time = now
@@ -108,6 +124,8 @@ class ScrapeService:
             )
             self.db.add(comp_obj)
         run.competitors_attempted = len(competitors)
+        # Transactional outbox dispatch record created atomically with ScrapeRun
+        create_outbox_message(self.db, "SCRAPE_RUN_DISPATCH", {"run_id": run.id, "project_id": project_id})
         self.db.commit()
         self.db.refresh(run)
         return run
@@ -152,13 +170,22 @@ class ScrapeService:
         self.db.commit()
 
     def resume_run(self, run_id: str) -> ScrapeRun | None:
-        run = self.scrape_run_repo.get(run_id)
+        try:
+            run = self.db.query(ScrapeRun).filter(ScrapeRun.id == run_id).with_for_update().first()
+        except Exception:
+            run = self.scrape_run_repo.get(run_id)
         if not run:
             return None
         self._verify_run(run)
 
-        # In a real system, you'd enqueue only PAUSED_MANUAL_INTERVENTION or FAILED competitors
-        self.scrape_run_repo.update(run, {"status": "QUEUED"})
+        if run.status in ["RUNNING", "RETRYING"]:
+            raise ValueError(f"Run is already active ({run.status}) and cannot be resumed")
+
+        run.status = "QUEUED"
+        # Transactional outbox dispatch record created atomically with ScrapeRun resume
+        create_outbox_message(self.db, "SCRAPE_RUN_DISPATCH", {"run_id": run.id, "project_id": run.project_id})
+        self.db.commit()
+        self.db.refresh(run)
         return run
 
     def get_schedule(self, project_id: str):

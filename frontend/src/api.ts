@@ -270,12 +270,16 @@ export const getAnalyticsSummary = (projectId: string) => api.get<AnalyticsSumma
 
 export interface GenerationRequest {
   generation_type: 'IDEA' | 'FULL';
+  workflow_mode?: 'MARKETING_OPPORTUNITIES' | 'CREATE_CONTENT';
   count?: number;
   topic?: string;
   content_type?: string;
   keywords?: string[];
   cta_style?: string;
   campaign_context?: string;
+  context_type?: 'topic' | 'keyword' | 'content_type' | 'competitor_post' | 'marketing_opportunity';
+  context_value?: string;
+  context_generation_id?: string;
 }
 
 export interface RegenerateRequest {
@@ -302,12 +306,21 @@ export interface GeneratedContentResponse {
   updated_at: string;
   parent_generation_id?: string;
   regeneration_reason?: string;
+  source_context?: {
+    workflow_mode?: string;
+    rationale?: string;
+    title?: string;
+    evidence?: { post_ids?: string[]; posts?: Array<Record<string, unknown>>; intelligence_status?: string; [key: string]: unknown };
+    [key: string]: unknown;
+  };
 }
 
 export const startGeneration = (projectId: string, data: GenerationRequest) => api.post<GeneratedContentResponse[]>(`/projects/${projectId}/content/generate`, data);
 export const regenerateContent = (projectId: string, contentId: string, data: RegenerateRequest) => api.post<GeneratedContentResponse>(`/projects/${projectId}/content/${contentId}/regenerate`, data);
 export const getGenerations = (projectId: string, skip = 0, limit = 50) => api.get<GeneratedContentResponse[]>(`/projects/${projectId}/content`, { params: { skip, limit } });
 export const getGeneration = (projectId: string, contentId: string) => api.get<GeneratedContentResponse>(`/projects/${projectId}/content/${contentId}`);
+export interface GenerationPostSource { id: string; business_name: string; date?: string; summary: string; topic?: string; content_type?: string; }
+export const getGenerationPostSources = (projectId: string) => api.get<GenerationPostSource[]>(`/projects/${projectId}/content/intelligence/posts`);
 
 export default api;
 

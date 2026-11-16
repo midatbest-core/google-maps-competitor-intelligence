@@ -35,7 +35,15 @@ LEGACY_TIMESTAMP_TABLES = (
 
 
 def _assert_no_null_timestamps() -> None:
+    from alembic import context
+    try:
+        if context.is_offline_mode():
+            return
+    except Exception:
+        pass
     connection = op.get_bind()
+    if connection is None:
+        return
     tables_with_nulls = []
 
     for table_name in LEGACY_TIMESTAMP_TABLES:
@@ -44,11 +52,14 @@ def _assert_no_null_timestamps() -> None:
             sa.column("created_at"),
             sa.column("updated_at"),
         )
-        null_count = connection.execute(
+        res = connection.execute(
             sa.select(sa.func.count())
             .select_from(table)
             .where(sa.or_(table.c.created_at.is_(None), table.c.updated_at.is_(None)))
-        ).scalar_one()
+        )
+        if res is None:
+            return
+        null_count = res.scalar_one()
         if null_count:
             tables_with_nulls.append(f"{table_name} ({null_count} rows)")
 

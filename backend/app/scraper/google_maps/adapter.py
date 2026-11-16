@@ -94,6 +94,10 @@ class GoogleMapsAdapter(SourceAdapter):
             result.status = "ERROR"
             result.error_message = str(e)
         finally:
+            if self.page is page:
+                self.page = None
+            if getattr(self, "navigator", None) is navigator:
+                self.navigator = None
             if page:
                 await self.browser_manager.close_page(page)
             

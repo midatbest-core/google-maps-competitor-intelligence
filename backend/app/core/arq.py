@@ -7,8 +7,8 @@ from urllib.parse import unquote, urlsplit
 def redis_settings_from_url(
     redis_url: str,
     *,
-    conn_timeout: int = 1,
-    conn_retries: int = 0,
+    conn_timeout: int = 5,
+    conn_retries: int = 3,
 ) -> RedisSettings:
     """Parse a Redis URI without silently weakening TLS or changing hosts."""
     parsed = urlsplit(redis_url)
@@ -38,7 +38,7 @@ async def get_redis_pool():
     return await create_pool(
         redis_settings_from_url(
             settings.REDIS_URL,
-            conn_timeout=1,
-            conn_retries=0,
+            conn_timeout=5,
+            conn_retries=3,
         )
     )

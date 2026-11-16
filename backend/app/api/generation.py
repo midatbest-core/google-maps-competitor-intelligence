@@ -13,11 +13,13 @@ logger = logging.getLogger(__name__)
 
 
 async def _enqueue_generation_jobs(contents, service: GenerationService, background_tasks: BackgroundTasks = None) -> None:
+    enqueued = False
     try:
         pool = await get_redis_pool()
         for gc in contents:
             await pool.enqueue_job("generate_content_job", gc.id)
         await pool.close()
+        enqueued = True
     except Exception as exc:
         if background_tasks is None:
             for gc in contents:
@@ -27,7 +29,7 @@ async def _enqueue_generation_jobs(contents, service: GenerationService, backgro
             raise HTTPException(status_code=503, detail="Generation queue is unavailable")
         logger.debug(f"Redis unavailable, falling back to background tasks: {exc}")
 
-    if background_tasks is not None:
+    if not enqueued and background_tasks is not None:
         for content in contents:
             background_tasks.add_task(generate_content_job, None, content.id)
 
@@ -77,6 +79,13 @@ def list_content(project_id: str, skip: int = 0, limit: int = 50, service: Gener
     if limit > 100:
         limit = 100
     return service.list_generated_content(project_id, skip=skip, limit=limit)
+
+@generation_router.get("/projects/{project_id}/content/intelligence/posts")
+def list_generation_post_sources(project_id: str, limit: int = 50, service: GenerationService = Depends(get_generation_service)):
+    try:
+        return service.list_competitor_post_sources(project_id, limit=limit)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @generation_router.get("/projects/{project_id}/content/{content_id}", response_model=GeneratedContentResponse)
 def get_content(project_id: str, content_id: str, service: GenerationService = Depends(get_generation_service)):

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 from typing import Optional
 import urllib.parse
@@ -5,6 +6,8 @@ import urllib.parse
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from app.api.dependencies import (
     get_analytics_service,
@@ -15,6 +18,7 @@ from app.api.dependencies import (
     get_scrape_service,
 )
 from app.core.arq import get_redis_pool
+from app.services.outbox_service import OutboxDispatcher
 from app.core.config import settings
 from app.core.database import get_db
 from app.providers.ai.factory import get_ai_provider
@@ -42,7 +46,6 @@ from app.services.post_service import PostService
 from app.services.project_service import ProjectService
 from app.services.review_service import ReviewService
 from app.services.scrape_service import ScrapeService
-from app.workers.main import scrape_job
 
 health_router = APIRouter()
 project_router = APIRouter(prefix="/projects", tags=["projects"])
@@ -127,7 +130,7 @@ def remove_competitor(project_id: str, competitor_id: str, service: ProjectServi
         raise HTTPException(status_code=404, detail=str(e))
 
 @project_router.post("/{project_id}/scrape", response_model=ScrapeRunResponse, status_code=status.HTTP_202_ACCEPTED)
-async def start_scrape(project_id: str, background_tasks: BackgroundTasks, service: ScrapeService = Depends(get_scrape_service)):
+async def start_scrape(project_id: str, service: ScrapeService = Depends(get_scrape_service)):
     try:
         run = service.create_scrape_run(project_id)
     except ValueError as e:
@@ -135,7 +138,42 @@ async def start_scrape(project_id: str, background_tasks: BackgroundTasks, servi
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
         raise HTTPException(status_code=404, detail=str(e))
 
-    background_tasks.add_task(scrape_job, None, run.id)
+    try:
+        pool = await get_redis_pool()
+        dispatcher = OutboxDispatcher(pool=pool)
+        dispatched = 0
+        if hasattr(service, "db") and hasattr(service.db, "scalars"):
+            dispatched = await dispatcher.dispatch_pending(service.db, limit=10)
+        if dispatched == 0:
+            job = await pool.enqueue_job("scrape_job", run.id, _job_id=f"scrape_{run.id}")
+            if job is None:
+                logger.info(f"Scrape job for run {run.id} is already queued in ARQ")
+            else:
+                logger.info(f"Enqueued scrape_job for run {run.id} to Redis ARQ worker (job_id: {job.job_id})")
+        await pool.close()
+    except Exception as e:
+        logger.error(f"Failed to enqueue scrape_job for run {run.id} to Redis ARQ: {e}")
+        run.status = "FAILED"
+        run.error_logs = [f"Queue service unavailable: {str(e)}"]
+        if hasattr(service, "db") and hasattr(service.db, "commit"):
+            from app.models.outbox import OutboxMessage
+            try:
+                pending_msgs = service.db.query(OutboxMessage).filter(
+                    OutboxMessage.status.in_(["PENDING", "CLAIMED"]),
+                    OutboxMessage.event_type == "SCRAPE_RUN_DISPATCH"
+                ).all()
+                for msg in pending_msgs:
+                    if msg.payload and msg.payload.get("run_id") == run.id:
+                        msg.status = "FAILED"
+                        msg.error_message = f"API enqueue failed: {str(e)}"
+            except Exception:
+                pass
+            service.db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Background scraping queue service is unavailable. Please try again later."
+        )
+
     return run
 
 @project_router.get("/{project_id}/scrape-runs", response_model=list[ScrapeRunResponse])
@@ -310,13 +348,50 @@ def get_scrape_run(run_id: str, service: ScrapeService = Depends(get_scrape_serv
         raise HTTPException(status_code=404, detail=str(e))
 
 @scrape_router.post("/{run_id}/resume", response_model=ScrapeRunResponse)
-async def resume_scrape_run(run_id: str, background_tasks: BackgroundTasks, service: ScrapeService = Depends(get_scrape_service)):
+async def resume_scrape_run(run_id: str, service: ScrapeService = Depends(get_scrape_service)):
     try:
         run = service.resume_run(run_id)
         if not run:
             raise HTTPException(status_code=404, detail="Scrape run not found")
     except ValueError as e:
+        if "already active" in str(e):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
         raise HTTPException(status_code=404, detail=str(e))
 
-    background_tasks.add_task(scrape_job, None, run.id)
+    try:
+        pool = await get_redis_pool()
+        dispatcher = OutboxDispatcher(pool=pool)
+        dispatched = 0
+        if hasattr(service, "db") and hasattr(service.db, "scalars"):
+            dispatched = await dispatcher.dispatch_pending(service.db, limit=10)
+        if dispatched == 0:
+            job = await pool.enqueue_job("scrape_job", run.id, _job_id=f"scrape_{run.id}")
+            if job is None:
+                logger.info(f"Resume scrape job for run {run.id} is already queued in ARQ")
+            else:
+                logger.info(f"Enqueued resumed scrape_job for run {run.id} to Redis ARQ worker (job_id: {job.job_id})")
+        await pool.close()
+    except Exception as e:
+        logger.error(f"Failed to enqueue resumed scrape_job for run {run.id} to Redis ARQ: {e}")
+        run.status = "FAILED"
+        run.error_logs = [f"Queue service unavailable during resume: {str(e)}"]
+        if hasattr(service, "db") and hasattr(service.db, "commit"):
+            from app.models.outbox import OutboxMessage
+            try:
+                pending_msgs = service.db.query(OutboxMessage).filter(
+                    OutboxMessage.status.in_(["PENDING", "CLAIMED"]),
+                    OutboxMessage.event_type == "SCRAPE_RUN_DISPATCH"
+                ).all()
+                for msg in pending_msgs:
+                    if msg.payload and msg.payload.get("run_id") == run.id:
+                        msg.status = "FAILED"
+                        msg.error_message = f"API resume enqueue failed: {str(e)}"
+            except Exception:
+                pass
+            service.db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Background scraping queue service is unavailable. Please try again later."
+        )
+
     return run

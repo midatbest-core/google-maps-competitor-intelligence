@@ -23,6 +23,7 @@ class BrowserManager:
         self.playwright: Playwright | None = None
         self.browser: Browser | None = None
         self.context: BrowserContext | None = None
+        self.pages_processed: int = 0
 
     async def start(self) -> Page:
         """Starts Playwright, launches Chromium with container-safe flags, and returns a new page."""
@@ -61,16 +62,22 @@ class BrowserManager:
             return await self.start()
 
     async def close_page(self, page: Page | None):
-        """Safely closes a page if open."""
+        """Safely closes a page if open, recycling browser every 5 scrapes to prevent memory buildup."""
         if page:
             try:
                 if not page.is_closed():
                     await page.close()
             except Exception as e:
                 logger.debug(f"Error closing page: {e}")
+        self.pages_processed += 1
+        if self.pages_processed >= 5:
+            logger.info("Recycling browser process after 5 scrapes to keep container memory footprint minimal")
+            await self.stop()
+            self.pages_processed = 0
 
     async def stop(self):
         """Safely tears down context, browser, and playwright instances."""
+        self.pages_processed = 0
         if self.context:
             try:
                 await self.context.close()

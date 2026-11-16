@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import AppLayout from '../components/AppLayout';
 import { useToast } from '../context/ToastContext';
-import { startGeneration, regenerateContent, getGeneration, getGenerations } from '../api';
-import type { GenerationRequest, GeneratedContentResponse } from '../api';
+import { startGeneration, regenerateContent, getGeneration, getGenerations, getGenerationPostSources } from '../api';
+import type { GenerationRequest, GeneratedContentResponse, GenerationPostSource } from '../api';
 import {
   Wand2,
   Copy,
@@ -24,7 +24,13 @@ const ProjectGenerate: React.FC = () => {
   const { showToast } = useToast();
 
   // Inputs
-  const [generationType, setGenerationType] = useState<'IDEA' | 'FULL'>('IDEA');
+  const [workflowMode, setWorkflowMode] = useState<'MARKETING_OPPORTUNITIES' | 'CREATE_CONTENT'>(
+    searchParams.has('context_type') || searchParams.has('topic') || searchParams.has('keyword') || searchParams.has('content_type')
+      ? 'CREATE_CONTENT' : 'MARKETING_OPPORTUNITIES'
+  );
+  const [contextType, setContextType] = useState<GenerationRequest['context_type'] | ''>(searchParams.get('context_type') as GenerationRequest['context_type'] || (searchParams.has('content_type') ? 'content_type' : searchParams.has('keyword') ? 'keyword' : searchParams.has('topic') ? 'topic' : ''));
+  const [contextValue, setContextValue] = useState(searchParams.get('context_value') || searchParams.get('topic') || searchParams.get('keyword') || searchParams.get('content_type') || '');
+  const [contextGenerationId, setContextGenerationId] = useState(searchParams.get('context_generation_id') || '');
   const [topic, setTopic] = useState(searchParams.get('topic') || '');
   const [keyword, setKeyword] = useState(searchParams.get('keyword') || '');
   const [contentType, setContentType] = useState(searchParams.get('content_type') || '');
@@ -37,6 +43,7 @@ const ProjectGenerate: React.FC = () => {
 
   // Results
   const [generations, setGenerations] = useState<GeneratedContentResponse[]>([]);
+  const [postSources, setPostSources] = useState<GenerationPostSource[]>([]);
 
   // Load existing generations on mount
   useEffect(() => {
@@ -45,6 +52,10 @@ const ProjectGenerate: React.FC = () => {
         .then(res => setGenerations(res.data))
         .catch(err => console.error("Could not load previous generations", err));
     }
+  }, [projectId]);
+
+  useEffect(() => {
+    if (projectId) getGenerationPostSources(projectId).then(res => setPostSources(res.data)).catch(() => setPostSources([]));
   }, [projectId]);
 
   // Periodically check status if there are QUEUED/RUNNING tasks
@@ -80,17 +91,21 @@ const ProjectGenerate: React.FC = () => {
     setError(null);
 
     const payload: GenerationRequest = {
-      generation_type: generationType,
-      topic: topic || undefined,
-      content_type: contentType || undefined,
-      keywords: keyword ? [keyword] : undefined,
-      campaign_context: instruction || undefined,
-      count: generationType === 'IDEA' ? 3 : 1,
+      generation_type: workflowMode === 'MARKETING_OPPORTUNITIES' ? 'IDEA' : 'FULL',
+      workflow_mode: workflowMode,
+      topic: workflowMode === 'CREATE_CONTENT' ? (topic || undefined) : undefined,
+      content_type: workflowMode === 'CREATE_CONTENT' ? (contentType || undefined) : undefined,
+      keywords: workflowMode === 'CREATE_CONTENT' && keyword ? [keyword] : undefined,
+      campaign_context: workflowMode === 'CREATE_CONTENT' ? (instruction || undefined) : undefined,
+      context_type: contextType || undefined,
+      context_value: contextValue || undefined,
+      context_generation_id: contextGenerationId || undefined,
+      count: 1,
     };
 
     try {
       const res = await startGeneration(projectId!, payload);
-      showToast(`Generating ${generationType === 'IDEA' ? 'marketing ideas' : 'full post'} with AI...`, 'info');
+      showToast(`Generating ${workflowMode === 'MARKETING_OPPORTUNITIES' ? 'marketing opportunities' : 'content'} with project intelligence...`, 'info');
       setGenerations([...res.data, ...generations]);
     } catch (err: any) {
       const msg = err.response?.data?.detail || 'Failed to start generation';
@@ -151,7 +166,7 @@ const ProjectGenerate: React.FC = () => {
           <div className="studio-form-col">
             <div className="generator-card">
               <h3 style={{ margin: '0 0 16px', fontSize: '16px', color: 'white' }}>
-                Generation Parameters
+                Generate with MapsIntel
               </h3>
 
               <form onSubmit={handleSubmit} className="generate-form">
@@ -160,26 +175,51 @@ const ProjectGenerate: React.FC = () => {
                   <div className="mode-toggle">
                     <button
                       type="button"
-                      className={`mode-btn ${generationType === 'IDEA' ? 'active' : ''}`}
-                      onClick={() => setGenerationType('IDEA')}
+                      className={`mode-btn ${workflowMode === 'MARKETING_OPPORTUNITIES' ? 'active' : ''}`}
+                      onClick={() => setWorkflowMode('MARKETING_OPPORTUNITIES')}
                     >
-                      <Lightbulb size={14} /> Brainstorm Ideas
+                      <Lightbulb size={14} /> Marketing Opportunities
                     </button>
                     <button
                       type="button"
-                      className={`mode-btn ${generationType === 'FULL' ? 'active' : ''}`}
-                      onClick={() => setGenerationType('FULL')}
+                      className={`mode-btn ${workflowMode === 'CREATE_CONTENT' ? 'active' : ''}`}
+                      onClick={() => setWorkflowMode('CREATE_CONTENT')}
                     >
-                      <FileText size={14} /> Full Update Post
+                      <FileText size={14} /> Create Content
                     </button>
                   </div>
                 </div>
 
+                <div className="context-indicator">
+                  {workflowMode === 'MARKETING_OPPORTUNITIES'
+                    ? 'Using project-wide intelligence'
+                    : contextType && contextValue
+                      ? `Based on ${contextType.replace('_', ' ')}: ${contextType === 'competitor_post' ? postSources.find(post => post.id === contextValue)?.business_name || 'selected post' : contextValue}`
+                      : 'Using relevant project intelligence for your topic'}
+                </div>
+
+                {workflowMode === 'CREATE_CONTENT' && <>
+                {contextType && contextValue && <div className="selected-context">
+                  <span>Selected context: <strong>{contextType.replace('_', ' ')} · {contextType === 'competitor_post' ? postSources.find(post => post.id === contextValue)?.summary.slice(0, 90) || 'Selected post' : contextValue}</strong></span>
+                  <button type="button" className="secondary-btn" onClick={() => { setContextType(''); setContextValue(''); setContextGenerationId(''); }}>Clear</button>
+                </div>}
+                <div className="form-group">
+                  <label>Start from a competitor post (optional)</label>
+                  <select value={contextType === 'competitor_post' ? contextValue : ''} onChange={e => {
+                    const postId = e.target.value;
+                    setContextType(postId ? 'competitor_post' : '');
+                    setContextValue(postId);
+                    setContextGenerationId('');
+                  }}>
+                    <option value="">Choose a collected post</option>
+                    {postSources.map(post => <option key={post.id} value={post.id}>{post.business_name} · {(post.summary || 'Post').slice(0, 90)}</option>)}
+                  </select>
+                </div>
                 <div className="form-group">
                   <label>Topic Opportunity</label>
                   <input
                     type="text"
-                    value={topic}
+                    value={topic || (contextType === 'topic' ? contextValue : '')}
                     onChange={e => setTopic(e.target.value)}
                     placeholder="e.g. Weekend Brunch, Dessert Specials"
                   />
@@ -214,6 +254,7 @@ const ProjectGenerate: React.FC = () => {
                     placeholder="e.g. Highlight our fresh organic ingredients and invite readers to tag a friend..."
                   />
                 </div>
+                </>}
 
                 {error && (
                   <div className="error-banner mb-3">
@@ -230,8 +271,8 @@ const ProjectGenerate: React.FC = () => {
                   <Wand2 size={16} />
                   <span>
                     {isSubmitting
-                      ? 'Generating with AI...'
-                      : `Generate ${generationType === 'IDEA' ? 'Ideas' : 'Content'}`}
+                      ? 'Generating with intelligence...'
+                      : workflowMode === 'MARKETING_OPPORTUNITIES' ? 'Find Marketing Opportunities' : 'Create Content'}
                   </span>
                 </button>
               </form>
@@ -263,8 +304,8 @@ const ProjectGenerate: React.FC = () => {
                     >
                       <div className="gen-header">
                         <span className="gen-type-badge">
-                          {gen.generation_type === 'IDEA' ? <Lightbulb size={13} /> : <FileText size={13} />}
-                          {gen.generation_type}
+                          {gen.source_context?.workflow_mode === 'MARKETING_OPPORTUNITIES' ? <Lightbulb size={13} /> : <FileText size={13} />}
+                          {gen.source_context?.workflow_mode === 'MARKETING_OPPORTUNITIES' ? 'MARKETING OPPORTUNITY' : 'CONTENT DRAFT'}
                         </span>
                         <span className={`status-pill ${isQueued ? 'status-running' : gen.status === 'SUCCESS' ? 'status-success' : 'status-failed'}`}>
                           {isQueued && <span className="pulse-dot running"></span>}
@@ -288,6 +329,7 @@ const ProjectGenerate: React.FC = () => {
 
                       {gen.status === 'SUCCESS' && (
                         <div className="gen-success-content">
+                          {gen.source_context?.title && <h4 className="generated-title">{gen.source_context.title}</h4>}
                           <div className="content-body">
                             {gen.generation_type === 'IDEA' ? gen.generated_idea : gen.full_copy}
                           </div>
@@ -303,6 +345,8 @@ const ProjectGenerate: React.FC = () => {
                               <strong>Visual Concept:</strong> {gen.image_concept}
                             </div>
                           )}
+                          {(gen.source_context?.evidence?.post_ids?.length ?? 0) > 0 && <div className="context-indicator">Based on {gen.source_context?.evidence?.post_ids?.length} source posts · evidence IDs saved with this generation</div>}
+                          {gen.source_context?.rationale && <div className="image-concept-box"><strong>Why this is relevant:</strong> {gen.source_context.rationale}</div>}
 
                           <div className="gen-actions-bar">
                             <button
@@ -319,6 +363,12 @@ const ProjectGenerate: React.FC = () => {
                               <RotateCw size={14} />
                               <span>Regenerate Variation</span>
                             </button>
+                            {gen.source_context?.workflow_mode === 'MARKETING_OPPORTUNITIES' && <button className="secondary-btn" onClick={() => {
+                              setWorkflowMode('CREATE_CONTENT');
+                              setContextType('marketing_opportunity');
+                              setContextValue(gen.topic || 'Selected marketing opportunity');
+                              setContextGenerationId(gen.id);
+                            }}><FileText size={14} /><span>Create content from this opportunity</span></button>}
                           </div>
                         </div>
                       )}

@@ -46,7 +46,9 @@ const ProjectStrategy: React.FC = () => {
 
   const navigateToGenerate = (type: string, value: string) => {
     const params = new URLSearchParams();
-    params.set(type, value);
+    params.set('context_type', type);
+    params.set('context_value', value);
+    params.set(type === 'content_type' ? 'content_type' : type, value);
     showToast(`Pre-filling AI Generator with: "${value}"`, 'info');
     navigate(`/projects/${projectId}/generate?${params.toString()}`);
   };

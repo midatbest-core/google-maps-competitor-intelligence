@@ -53,6 +53,43 @@ async def scrape_job(ctx, run_id: str):
     return await _execute_scrape_job(ctx, run_id)
 
 
+async def _heartbeat_worker(run_id: str, stop_event: asyncio.Event, interval_seconds: int = 15):
+    """
+    Periodically updates ScrapeRun.heartbeat_at in a dedicated database session.
+    Runs continuously in the background while the scrape job executes.
+    """
+    while not stop_event.is_set():
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
+            break
+        except asyncio.TimeoutError:
+            pass
+
+        hb_db = None
+        try:
+            hb_db = SessionLocal()
+            now = datetime.now(timezone.utc)
+            hb_db.query(ScrapeRun).filter(ScrapeRun.id == run_id).update(
+                {"heartbeat_at": now},
+                synchronize_session=False
+            )
+            hb_db.commit()
+            logger.debug(f"[Heartbeat] Refreshed heartbeat for run {run_id} at {now}")
+        except Exception as e:
+            logger.warning(f"[Heartbeat] Error updating heartbeat for run {run_id}: {e}")
+            if hb_db:
+                try:
+                    hb_db.rollback()
+                except Exception:
+                    pass
+        finally:
+            if hb_db:
+                try:
+                    hb_db.close()
+                except Exception:
+                    pass
+
+
 async def _execute_scrape_job(ctx, run_id: str):
     logger.info(f"Starting scrape job for run {run_id}")
 
@@ -62,23 +99,38 @@ async def _execute_scrape_job(ctx, run_id: str):
         adapter = GoogleMapsAdapter()
 
     db = SessionLocal()
+    heartbeat_stop = None
+    heartbeat_task = None
     try:
         run = db.query(ScrapeRun).filter(ScrapeRun.id == run_id).first()
         if not run:
             logger.error(f"Run {run_id} not found")
             return
 
+        competitor_runs = db.query(ScrapeRunCompetitor).filter(ScrapeRunCompetitor.scrape_run_id == run_id).all()
+        has_incomplete = any(c.status not in ("SUCCESS", "NO_DATA") for c in competitor_runs)
+
+        # GUARD: Completed runs must never be restarted by duplicate or expired ARQ jobs
+        if run.status == "SUCCESS" or (run.status in ("FAILED", "PARTIAL_SUCCESS", "PAUSED_MANUAL_INTERVENTION") and not has_incomplete):
+            logger.info(f"Run {run_id} is already in terminal state ({run.status}), ignoring duplicate ARQ execution.")
+            return
+
+        now = datetime.now(timezone.utc)
         run.status = "RUNNING"
-        run.start_time = datetime.now(timezone.utc)
+        run.start_time = now
+        run.heartbeat_at = now
         db.commit()
 
-        competitor_runs = db.query(ScrapeRunCompetitor).filter(ScrapeRunCompetitor.scrape_run_id == run_id).all()
+        # Start periodic background heartbeat task
+        heartbeat_stop = asyncio.Event()
+        heartbeat_task = asyncio.create_task(_heartbeat_worker(run_id, heartbeat_stop, interval_seconds=15))
 
         for c in competitor_runs:
             if c.status in ("SUCCESS", "NO_DATA"):
                 continue
 
             c.status = "RUNNING"
+            run.heartbeat_at = datetime.now(timezone.utc)
             db.commit()
 
             # Validate target URL
@@ -154,6 +206,7 @@ async def _execute_scrape_job(ctx, run_id: str):
                 elif result and result.status == "NO_DATA":
                     c.posts_discovered = 0
 
+                run.heartbeat_at = datetime.now(timezone.utc)
                 db.commit()
             except Exception as comp_err:
                 logger.exception(f"Error persisting competitor run {c.id}: {comp_err}")
@@ -195,6 +248,13 @@ async def _execute_scrape_job(ctx, run_id: str):
         except Exception as inner_e:
             logger.error(f"Failed to persist FAILED status for run {run_id}: {inner_e}")
     finally:
+        if heartbeat_stop is not None:
+            heartbeat_stop.set()
+        if heartbeat_task is not None:
+            try:
+                await asyncio.wait_for(heartbeat_task, timeout=2.0)
+            except Exception:
+                pass
         if not ctx:
             try:
                 await adapter.close()
@@ -328,7 +388,7 @@ async def scheduler_tick(ctx):
 
             db.commit() # Commit the claim immediately so other workers see it
 
-            # Check for active run
+            # Check for active run and reconcile if heartbeat has expired (>300s / 5 mins)
             active_run = db.scalar(
                 select(ScrapeRun)
                 .where(ScrapeRun.project_id == schedule.project_id)
@@ -336,16 +396,52 @@ async def scheduler_tick(ctx):
                 .limit(1)
             )
 
+            if active_run:
+                # Use dedicated heartbeat_at, falling back to start_time or created_at for legacy runs
+                last_alive = active_run.heartbeat_at or active_run.start_time or active_run.created_at
+                if last_alive:
+                    last_alive = last_alive.replace(tzinfo=timezone.utc) if last_alive.tzinfo is None else last_alive
+                    if (now - last_alive).total_seconds() > 300:
+                        all_comps = active_run.competitor_runs
+                        if all_comps and all(cr.status in ("SUCCESS", "NO_DATA") for cr in all_comps):
+                            active_run.status = "SUCCESS"
+                            active_run.competitors_succeeded = len(all_comps)
+                            active_run.competitors_failed = 0
+                        else:
+                            any_succeeded = any(cr.status in ("SUCCESS", "NO_DATA") for cr in (all_comps or []))
+                            active_run.status = "PARTIAL_SUCCESS" if any_succeeded else "FAILED"
+                            active_run.error_logs = ["Marked as FAILED due to heartbeat expiration (worker dead)"]
+                            for cr in (all_comps or []):
+                                if cr.status == "RUNNING":
+                                    cr.status = "FAILED"
+                                    cr.error_message = "Worker process interrupted"
+                        active_run.end_time = now
+                        db.commit()
+                        active_run = None
+
             if not active_run:
                 logger.info(f"scheduled_scrape_started: Project {schedule.project_id}")
                 try:
-                    run = service.create_scrape_run(schedule.project_id)
-                    if ctx and 'redis' in ctx:
-                        await ctx['redis'].enqueue_job('scrape_job', run.id)
+                    # Exclusively dispatches via transactional outbox
+                    service.create_scrape_run(schedule.project_id)
                 except Exception as e:
                     logger.error(f"scheduled_scrape_failed: Project {schedule.project_id}: {e}")
             else:
                 logger.info(f"scheduled_scrape_skipped_active_run: Project {schedule.project_id}")
+
+        # Dispatch pending/retrying transactional outbox messages exclusively
+        try:
+            from app.services.outbox_service import OutboxDispatcher, cleanup_dispatched_outbox_messages
+            redis_pool = ctx.get('redis') if ctx else None
+            dispatcher = OutboxDispatcher(pool=redis_pool)
+            dispatched = await dispatcher.dispatch_pending(db, limit=50)
+            if dispatched > 0:
+                logger.info(f"[SchedulerTick] Dispatched {dispatched} pending outbox messages")
+            
+            # Retention cleanup for dispatched outbox messages older than 30 days
+            cleanup_dispatched_outbox_messages(db, older_than_days=30)
+        except Exception as oe:
+            logger.error(f"[SchedulerTick] Error processing outbox messages: {oe}")
 
     except Exception as e:
         logger.exception("Error in scheduler_tick")
@@ -382,3 +478,4 @@ class WorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
     job_timeout = 1200  # 20 minutes job timeout (capped by per-business 60s timeouts)
+    max_jobs = 1        # Strict single-worker concurrency to prevent OOM and browser state collisions
