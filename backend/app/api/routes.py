@@ -131,6 +131,8 @@ async def start_scrape(project_id: str, background_tasks: BackgroundTasks, servi
     try:
         run = service.create_scrape_run(project_id)
     except ValueError as e:
+        if "already has an active run" in str(e):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
         raise HTTPException(status_code=404, detail=str(e))
 
     background_tasks.add_task(scrape_job, None, run.id)

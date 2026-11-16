@@ -1,0 +1,526 @@
+{
+  "summary": {
+    "passed": 49,
+    "failed": 0,
+    "blocked": 0,
+    "not_tested": 0
+  },
+  "features": {
+    "API Endpoints": [
+      {
+        "test": "GET /health",
+        "status": "PASS",
+        "detail": "status=200, latency=4.8ms"
+      },
+      {
+        "test": "GET /ready",
+        "status": "PASS",
+        "detail": "status=200, latency=3770.6ms"
+      },
+      {
+        "test": "GET /auth/me",
+        "status": "PASS",
+        "detail": "status=200, latency=2217.0ms"
+      },
+      {
+        "test": "GET /projects",
+        "status": "PASS",
+        "detail": "status=200, latency=1330.9ms"
+      },
+      {
+        "test": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd",
+        "status": "PASS",
+        "detail": "status=200, latency=1297.6ms"
+      },
+      {
+        "test": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/summary",
+        "status": "PASS",
+        "detail": "status=200, latency=3067.1ms"
+      },
+      {
+        "test": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/competitors",
+        "status": "PASS",
+        "detail": "status=200, latency=1716.4ms"
+      },
+      {
+        "test": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/discovery-candidates",
+        "status": "PASS",
+        "detail": "status=200, latency=2423.0ms"
+      },
+      {
+        "test": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/discovery-runs",
+        "status": "PASS",
+        "detail": "status=200, latency=1283.6ms"
+      },
+      {
+        "test": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/scrape-runs",
+        "status": "PASS",
+        "detail": "status=200, latency=2149.9ms"
+      },
+      {
+        "test": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/posts?page=1&page_size=20",
+        "status": "PASS",
+        "detail": "status=200, latency=3001.2ms"
+      },
+      {
+        "test": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/reviews",
+        "status": "PASS",
+        "detail": "status=200, latency=2175.5ms"
+      },
+      {
+        "test": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/summary",
+        "status": "PASS",
+        "detail": "status=200, latency=10459.8ms"
+      },
+      {
+        "test": "GET /analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/topics",
+        "status": "PASS",
+        "detail": "status=200, latency=152.8ms"
+      },
+      {
+        "test": "GET /analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/competitors",
+        "status": "PASS",
+        "detail": "status=200, latency=4.9ms"
+      },
+      {
+        "test": "GET /analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/keywords",
+        "status": "PASS",
+        "detail": "status=200, latency=20.0ms"
+      },
+      {
+        "test": "GET /analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/publishing",
+        "status": "PASS",
+        "detail": "status=200, latency=15.1ms"
+      },
+      {
+        "test": "GET /analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/gaps",
+        "status": "PASS",
+        "detail": "status=200, latency=5.6ms"
+      },
+      {
+        "test": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/intelligence",
+        "status": "PASS",
+        "detail": "status=200, latency=1516.6ms"
+      },
+      {
+        "test": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/intelligence/history",
+        "status": "PASS",
+        "detail": "status=200, latency=1703.6ms"
+      },
+      {
+        "test": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/content",
+        "status": "PASS",
+        "detail": "status=200, latency=1731.1ms"
+      }
+    ],
+    "Security": [
+      {
+        "test": "Unauthenticated Request Returns 401",
+        "status": "PASS",
+        "detail": "got 401"
+      },
+      {
+        "test": "Cross-User Project Access Denied (IDOR Protection)",
+        "status": "PASS",
+        "detail": "status=401"
+      },
+      {
+        "test": "SQL Injection Sanitization on Search",
+        "status": "PASS",
+        "detail": "Handled parameter safely"
+      }
+    ],
+    "Frontend UI": [
+      {
+        "test": "Login Page Render",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Dashboard Projects List Render",
+        "status": "PASS",
+        "detail": ""
+      }
+    ],
+    "Navigation & Routes": [
+      {
+        "test": "Page: Overview Dashboard (/projects/:id)",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Page: Competitor Roster (/projects/:id/competitors)",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Page: Discovery Scout (/projects/:id/discovery)",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Page: Scraping Pipeline (/projects/:id/scraping)",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Page: Posts Feed (/projects/:id/posts)",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Page: Reviews & Sentiment (/projects/:id/reviews)",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Page: Combined Intelligence (/projects/:id/intelligence)",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Page: Strategy & Gaps (/projects/:id/strategy)",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Page: Content Generation (/projects/:id/generate)",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Page: Generations History (/projects/:id/generations)",
+        "status": "PASS",
+        "detail": ""
+      }
+    ],
+    "Interactive Components": [
+      {
+        "test": "Discovery Tab Switch: All",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Discovery Tab Switch: New Candidates",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Discovery Tab Switch: Added",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Discovery Tab Switch: Declined",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Add Direct Competitor Modal Open",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Modal Cancel/Close",
+        "status": "PASS",
+        "detail": ""
+      },
+      {
+        "test": "Posts Search Input Filtering",
+        "status": "PASS",
+        "detail": "Input populated"
+      }
+    ],
+    "Responsive Layout": [
+      {
+        "test": "Viewport: Desktop 1920x1080",
+        "status": "PASS",
+        "detail": "No horizontal overflow"
+      },
+      {
+        "test": "Viewport: Laptop 1440x900",
+        "status": "PASS",
+        "detail": "No horizontal overflow"
+      },
+      {
+        "test": "Viewport: Tablet Landscape 1024x768",
+        "status": "PASS",
+        "detail": "No horizontal overflow"
+      },
+      {
+        "test": "Viewport: Tablet Portrait 768x1024",
+        "status": "PASS",
+        "detail": "No horizontal overflow"
+      },
+      {
+        "test": "Viewport: Mobile 375x812",
+        "status": "PASS",
+        "detail": "No horizontal overflow"
+      },
+      {
+        "test": "Viewport: Small Mobile 320x568",
+        "status": "PASS",
+        "detail": "No horizontal overflow"
+      }
+    ]
+  },
+  "api_endpoints": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 4.8,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/ready",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 3770.6,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 2217.0,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 1330.9,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects/235a2d92-9c65-4fe9-af13-a38275ba89bd",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 1297.6,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/summary",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 3067.1,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/competitors",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 1716.4,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/discovery-candidates",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 2423.0,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/discovery-runs",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 1283.6,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/scrape-runs",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 2149.9,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/posts?page=1&page_size=20",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 3001.2,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/reviews",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 2175.5,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/summary",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 10459.8,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/topics",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 152.8,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/competitors",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 4.9,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/keywords",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 20.0,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/publishing",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 15.1,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/gaps",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 5.6,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/intelligence",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 1516.6,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/intelligence/history",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 1703.6,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/content",
+      "expected": 200,
+      "status_code": 200,
+      "latency_ms": 1731.1,
+      "passed": true
+    }
+  ],
+  "security": [],
+  "performance": [
+    {
+      "endpoint": "GET /health",
+      "latency_ms": 4.8
+    },
+    {
+      "endpoint": "GET /ready",
+      "latency_ms": 3770.6
+    },
+    {
+      "endpoint": "GET /auth/me",
+      "latency_ms": 2217.0
+    },
+    {
+      "endpoint": "GET /projects",
+      "latency_ms": 1330.9
+    },
+    {
+      "endpoint": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd",
+      "latency_ms": 1297.6
+    },
+    {
+      "endpoint": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/summary",
+      "latency_ms": 3067.1
+    },
+    {
+      "endpoint": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/competitors",
+      "latency_ms": 1716.4
+    },
+    {
+      "endpoint": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/discovery-candidates",
+      "latency_ms": 2423.0
+    },
+    {
+      "endpoint": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/discovery-runs",
+      "latency_ms": 1283.6
+    },
+    {
+      "endpoint": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/scrape-runs",
+      "latency_ms": 2149.9
+    },
+    {
+      "endpoint": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/posts?page=1&page_size=20",
+      "latency_ms": 3001.2
+    },
+    {
+      "endpoint": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/reviews",
+      "latency_ms": 2175.5
+    },
+    {
+      "endpoint": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/summary",
+      "latency_ms": 10459.8
+    },
+    {
+      "endpoint": "GET /analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/topics",
+      "latency_ms": 152.8
+    },
+    {
+      "endpoint": "GET /analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/competitors",
+      "latency_ms": 4.9
+    },
+    {
+      "endpoint": "GET /analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/keywords",
+      "latency_ms": 20.0
+    },
+    {
+      "endpoint": "GET /analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/publishing",
+      "latency_ms": 15.1
+    },
+    {
+      "endpoint": "GET /analytics/235a2d92-9c65-4fe9-af13-a38275ba89bd/analytics/gaps",
+      "latency_ms": 5.6
+    },
+    {
+      "endpoint": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/intelligence",
+      "latency_ms": 1516.6
+    },
+    {
+      "endpoint": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/intelligence/history",
+      "latency_ms": 1703.6
+    },
+    {
+      "endpoint": "GET /projects/235a2d92-9c65-4fe9-af13-a38275ba89bd/content",
+      "latency_ms": 1731.1
+    }
+  ],
+  "screenshots": [],
+  "bugs": []
+}

@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api', // Use env var if available, else fallback to proxy
+  baseURL: import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '/api', // Use env var if available, else fallback to proxy
 });
 
 api.interceptors.request.use((config) => {
@@ -145,11 +145,11 @@ export interface ScrapeRun {
   competitor_runs?: ScrapeRunCompetitor[];
 }
 
-export const startScrape = (projectId: string) => api.post<ScrapeRun>(`/projects/${projectId}/scrape`);
-export const getScrapeRuns = (projectId: string) => api.get<ScrapeRun[]>(`/projects/${projectId}/scrape-runs`);
-export const getScrapeRun = (runId: string) => api.get<ScrapeRun>(`/scrape-runs/${runId}`);
-export const resumeScrapeRun = (runId: string) => api.post<ScrapeRun>(`/scrape-runs/${runId}/resume`);
-export const deleteScrapeRun = (projectId: string, runId: string) => api.delete(`/projects/${projectId}/scrape-runs/${runId}`);
+export const startScrape = (projectId: string, config?: any) => api.post<ScrapeRun>(`/projects/${projectId}/scrape`, undefined, config);
+export const getScrapeRuns = (projectId: string, config?: any) => api.get<ScrapeRun[]>(`/projects/${projectId}/scrape-runs`, config);
+export const getScrapeRun = (runId: string, config?: any) => api.get<ScrapeRun>(`/scrape-runs/${runId}`, config);
+export const resumeScrapeRun = (runId: string, config?: any) => api.post<ScrapeRun>(`/scrape-runs/${runId}/resume`, undefined, config);
+export const deleteScrapeRun = (projectId: string, runId: string, config?: any) => api.delete(`/projects/${projectId}/scrape-runs/${runId}`, config);
 
 
 

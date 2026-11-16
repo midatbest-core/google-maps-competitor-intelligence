@@ -1,6 +1,6 @@
 from typing import List, Optional
-from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy.orm import Session, selectinload, joinedload
+from sqlalchemy import select, desc
 from .base import BaseRepository
 from app.models.scrape import ScrapeRun, ScrapeRunCompetitor, ScrapeObservation
 
@@ -8,8 +8,27 @@ class ScrapeRunRepository(BaseRepository[ScrapeRun]):
     def __init__(self, session: Session):
         super().__init__(ScrapeRun, session)
 
+    def get(self, id: str) -> Optional[ScrapeRun]:
+        stmt = (
+            select(ScrapeRun)
+            .options(
+                selectinload(ScrapeRun.competitor_runs).joinedload(ScrapeRunCompetitor.business)
+            )
+            .where(ScrapeRun.id == id)
+        )
+        return self.session.scalar(stmt)
+
     def get_runs_for_project(self, project_id: str, skip: int = 0, limit: int = 100) -> List[ScrapeRun]:
-        stmt = select(ScrapeRun).where(ScrapeRun.project_id == project_id).offset(skip).limit(limit)
+        stmt = (
+            select(ScrapeRun)
+            .options(
+                selectinload(ScrapeRun.competitor_runs).joinedload(ScrapeRunCompetitor.business)
+            )
+            .where(ScrapeRun.project_id == project_id)
+            .order_by(desc(ScrapeRun.created_at))
+            .offset(skip)
+            .limit(limit)
+        )
         return list(self.session.scalars(stmt))
 
 class ScrapeRunCompetitorRepository(BaseRepository[ScrapeRunCompetitor]):

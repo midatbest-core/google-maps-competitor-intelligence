@@ -59,8 +59,15 @@ const ProjectScraping: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
   const [resuming, setResuming] = useState(false);
+  const [reconnectingMessage, setReconnectingMessage] = useState<string | null>(null);
 
-  const pollTimerRef = useRef<number | null>(null);
+  const pollTimeoutRef = useRef<number | null>(null);
+  const isPollingActiveRef = useRef<boolean>(false);
+  const inFlightPollRef = useRef<boolean>(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const consecutiveErrorsRef = useRef<number>(0);
+  const lastLoggedErrorRef = useRef<string | null>(null);
+  const isSubmittingScrapeRef = useRef<boolean>(false);
   const completedRunsNotifiedRef = useRef<Set<string>>(new Set());
   const userInitiatedRunIdsRef = useRef<Set<string>>(new Set());
 
@@ -92,6 +99,7 @@ const ProjectScraping: React.FC = () => {
         setActiveRunId(active.id);
         activeRunIdRef.current = active.id;
         setActiveRunDetails(prev => prev?.id === active.id ? prev : active);
+        startPolling();
       } else if (sortedRuns.length > 0 && !activeRunIdRef.current) {
         setActiveRunId(sortedRuns[0].id);
         activeRunIdRef.current = sortedRuns[0].id;
@@ -105,19 +113,25 @@ const ProjectScraping: React.FC = () => {
     }
   };
 
-  const fetchActiveRunDetails = async (runId: string) => {
+  const fetchActiveRunDetails = async (runId: string, signal?: AbortSignal) => {
     if (!runId || runId.startsWith('run-') || runId.startsWith('temp-')) {
       return;
     }
     try {
-      const res = await getScrapeRun(runId);
+      const res = await getScrapeRun(runId, { signal });
       setActiveRunDetails(res.data);
 
       if (['SUCCESS', 'PARTIAL_SUCCESS', 'FAILED', 'CANCELLED'].includes(res.data.status)) {
-        stopPolling();
+        // If this run is finished, check if any other runs are still active
+        setRuns(prev => {
+          const hasOtherActive = prev.some(r => r.id !== runId && ['QUEUED', 'RUNNING', 'RETRYING'].includes(r.status));
+          if (!hasOtherActive) {
+            stopPolling();
+          }
+          return prev;
+        });
 
-        // ONLY notify if this run was actively started/running in this session,
-        // and has not already shown a completion notification
+        // ONLY notify if this run was actively started/running in this session
         if (
           userInitiatedRunIdsRef.current.has(runId) &&
           !completedRunsNotifiedRef.current.has(runId)
@@ -134,56 +148,129 @@ const ProjectScraping: React.FC = () => {
           }
         }
       }
-    } catch (err) {
-      console.error('Failed to load run details', err);
+    } catch (err: any) {
+      if (err.name !== 'CanceledError' && err.name !== 'AbortError' && err.code !== 'ERR_CANCELED') {
+        const errKey = `detail:${err.response?.status || 'net'}`;
+        if (lastLoggedErrorRef.current !== errKey) {
+          console.warn('[Run Details] Could not fetch run details:', err);
+          lastLoggedErrorRef.current = errKey;
+        }
+      }
+    }
+  };
+
+  const stopPolling = () => {
+    isPollingActiveRef.current = false;
+    if (pollTimeoutRef.current) {
+      window.clearTimeout(pollTimeoutRef.current);
+      pollTimeoutRef.current = null;
+    }
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    inFlightPollRef.current = false;
+    setReconnectingMessage(null);
+  };
+
+  const scheduleNextPoll = (delayMs: number) => {
+    if (!isPollingActiveRef.current) return;
+    if (pollTimeoutRef.current) {
+      window.clearTimeout(pollTimeoutRef.current);
+    }
+    pollTimeoutRef.current = window.setTimeout(() => {
+      pollOnce();
+    }, delayMs);
+  };
+
+  const pollOnce = async () => {
+    if (!isPollingActiveRef.current || !projectId) return;
+    if (inFlightPollRef.current) return; // Prevent concurrent requests!
+
+    inFlightPollRef.current = true;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    try {
+      const runsRes = await getScrapeRuns(projectId, { signal: controller.signal });
+      const sorted = runsRes.data.sort((a, b) => {
+        if (a.start_time && b.start_time) {
+          return new Date(b.start_time).getTime() - new Date(a.start_time).getTime();
+        }
+        return b.id.localeCompare(a.id);
+      });
+      setRuns(sorted);
+
+      const hasActive = sorted.some(r => ['QUEUED', 'RUNNING', 'RETRYING'].includes(r.status));
+      if (!hasActive) {
+        stopPolling();
+        return;
+      }
+
+      let targetId = activeRunIdRef.current;
+      // If current active ID is optimistic/temporary, see if backend created the active run
+      if (targetId && (targetId.startsWith('run-') || targetId.startsWith('temp-'))) {
+        const serverActiveRun = sorted.find(r => ['QUEUED', 'RUNNING', 'RETRYING'].includes(r.status));
+        if (serverActiveRun) {
+          targetId = serverActiveRun.id;
+          setActiveRunId(serverActiveRun.id);
+          activeRunIdRef.current = serverActiveRun.id;
+          setActiveRunDetails(serverActiveRun);
+        }
+      }
+
+      if (targetId && !targetId.startsWith('run-') && !targetId.startsWith('temp-')) {
+        await fetchActiveRunDetails(targetId, controller.signal);
+      }
+
+      // Success: reset error tracking and schedule next standard poll (3.5s)
+      consecutiveErrorsRef.current = 0;
+      lastLoggedErrorRef.current = null;
+      setReconnectingMessage(null);
+      scheduleNextPoll(3500);
+    } catch (err: any) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError' || err.code === 'ERR_CANCELED') {
+        return;
+      }
+
+      consecutiveErrorsRef.current += 1;
+      const status = err.response?.status;
+      const errorMsg = err.response?.data?.detail || err.message || 'Network Error';
+      const errorKey = `${status || 'network'}:${errorMsg}`;
+
+      if (lastLoggedErrorRef.current !== errorKey) {
+        console.warn(`[Scrape Polling] Request failed (Status: ${status || 'Network Error'}). Backing off...`);
+        lastLoggedErrorRef.current = errorKey;
+      }
+
+      // Respect Retry-After header or calculate exponential backoff
+      let delayMs = 3500;
+      const retryAfterHeader = err.response?.headers?.['retry-after'];
+      if (retryAfterHeader) {
+        const parsed = parseInt(retryAfterHeader, 10);
+        if (!isNaN(parsed) && parsed > 0) {
+          delayMs = Math.min(parsed * 1000, 30000);
+        }
+      } else {
+        // Exponential backoff: 3.5s -> 5.2s -> 7.8s -> 11.8s -> max 30s
+        delayMs = Math.min(30000, Math.round(3500 * Math.pow(1.5, consecutiveErrorsRef.current)));
+      }
+
+      if (consecutiveErrorsRef.current >= 2) {
+        setReconnectingMessage(`Backend temporarily busy (reconnecting in ${Math.round(delayMs / 1000)}s)...`);
+      }
+
+      scheduleNextPoll(delayMs);
+    } finally {
+      inFlightPollRef.current = false;
     }
   };
 
   const startPolling = () => {
-    if (pollTimerRef.current) return;
-    pollTimerRef.current = window.setInterval(async () => {
-      if (!projectId) return;
-      try {
-        const runsRes = await getScrapeRuns(projectId);
-        const sorted = runsRes.data.sort((a, b) => {
-          if (a.start_time && b.start_time) {
-            return new Date(b.start_time).getTime() - new Date(a.start_time).getTime();
-          }
-          return b.id.localeCompare(a.id);
-        });
-        setRuns(sorted);
-
-        const hasActive = sorted.some(r => ['QUEUED', 'RUNNING', 'RETRYING'].includes(r.status));
-        if (!hasActive) {
-          stopPolling();
-        }
-
-        let targetId = activeRunIdRef.current;
-        // If current active ID is optimistic/temporary, see if backend created the active run
-        if (targetId && (targetId.startsWith('run-') || targetId.startsWith('temp-'))) {
-          const serverActiveRun = sorted.find(r => ['QUEUED', 'RUNNING', 'RETRYING'].includes(r.status));
-          if (serverActiveRun) {
-            targetId = serverActiveRun.id;
-            setActiveRunId(serverActiveRun.id);
-            activeRunIdRef.current = serverActiveRun.id;
-            setActiveRunDetails(serverActiveRun);
-          }
-        }
-
-        if (targetId && !targetId.startsWith('run-') && !targetId.startsWith('temp-')) {
-          await fetchActiveRunDetails(targetId);
-        }
-      } catch (e) {
-        console.error('Polling error', e);
-      }
-    }, 2800);
-  };
-
-  const stopPolling = () => {
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
+    if (isPollingActiveRef.current) return;
+    isPollingActiveRef.current = true;
+    consecutiveErrorsRef.current = 0;
+    scheduleNextPoll(1000);
   };
 
   useEffect(() => {
@@ -200,8 +287,6 @@ const ProjectScraping: React.FC = () => {
       const run = runs.find(r => r.id === activeRunId);
       if (run && ['QUEUED', 'RUNNING', 'RETRYING'].includes(run.status)) {
         startPolling();
-      } else {
-        stopPolling();
       }
     }
   }, [activeRunId]);
@@ -209,7 +294,7 @@ const ProjectScraping: React.FC = () => {
   const handleSelectRun = (run: ScrapeRun) => {
     setActiveRunId(run.id);
     activeRunIdRef.current = run.id;
-    setActiveRunDetails(run); // Immediately switch details view so user sees it right away!
+    setActiveRunDetails(run);
     if (!run.id.startsWith('run-') && !run.id.startsWith('temp-')) {
       fetchActiveRunDetails(run.id);
     }
@@ -220,13 +305,15 @@ const ProjectScraping: React.FC = () => {
   };
 
   const handleStartScrape = async () => {
-    if (!projectId) return;
+    if (!projectId || starting || isSubmittingScrapeRef.current) return;
     if (competitors.length === 0) {
       showToast('Add competitors on the Discovery or Competitors page before scraping.', 'warning');
       return;
     }
 
-    // 1. Instantly open scraping window view the exact moment the button is clicked (zero delay)
+    isSubmittingScrapeRef.current = true;
+    setStarting(true);
+
     const tempId = `run-${Date.now()}`;
     const optimisticRun: ScrapeRun = {
       id: tempId,
@@ -251,14 +338,11 @@ const ProjectScraping: React.FC = () => {
     activeRunIdRef.current = tempId;
     setActiveRunDetails(optimisticRun);
     setRuns(prev => [optimisticRun, ...prev.filter(r => r.id !== tempId)]);
-    setStarting(true);
-    startPolling();
 
     try {
       const res = await startScrape(projectId);
       const newRun = res.data;
 
-      // Update with server confirmed run ID
       userInitiatedRunIdsRef.current.add(newRun.id);
       setActiveRunId(newRun.id);
       activeRunIdRef.current = newRun.id;
@@ -267,20 +351,28 @@ const ProjectScraping: React.FC = () => {
 
       showToast(`Scrape pipeline started for ${competitors.length} competitors!`, 'info');
       startPolling();
-      loadData();
     } catch (err: any) {
+      const status = err.response?.status;
       const msg = err.response?.data?.detail || 'Failed to start scrape run';
-      showToast(msg, 'error');
-      // Rollback optimistic run on failure
-      setRuns(prev => prev.filter(r => r.id !== tempId));
-      if (activeRunIdRef.current === tempId) {
-        setActiveRunId(runs[0]?.id || null);
-        activeRunIdRef.current = runs[0]?.id || null;
-        setActiveRunDetails(runs[0] || null);
+
+      if (status === 409 || msg.includes('already has an active run')) {
+        showToast('A scrape run is already in progress. Syncing with active run...', 'info');
+        setRuns(prev => prev.filter(r => r.id !== tempId));
+        await loadData();
+        startPolling();
+      } else {
+        showToast(msg, 'error');
+        setRuns(prev => prev.filter(r => r.id !== tempId));
+        if (activeRunIdRef.current === tempId) {
+          setActiveRunId(runs[0]?.id || null);
+          activeRunIdRef.current = runs[0]?.id || null;
+          setActiveRunDetails(runs[0] || null);
+        }
+        await loadData();
       }
-      await loadData();
     } finally {
       setStarting(false);
+      isSubmittingScrapeRef.current = false;
     }
   };
 
@@ -387,6 +479,13 @@ const ProjectScraping: React.FC = () => {
       </header>
 
       <div className="content-area">
+        {reconnectingMessage && (
+          <div className="pipeline-banner" style={{ background: '#fffbeb', borderColor: '#fef3c7', color: '#92400e', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '8px' }}>
+            <Clock size={16} />
+            <span style={{ fontSize: '0.875rem' }}>{reconnectingMessage}</span>
+          </div>
+        )}
+
         {/* Pipeline Decoupling Banner */}
         <div className="pipeline-banner scraping">
           <Info size={20} className="banner-icon" />

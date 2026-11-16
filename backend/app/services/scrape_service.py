@@ -70,17 +70,18 @@ class ScrapeService:
             "status": "QUEUED"
         })
 
-        # 2. Add Competitors
+        # 2. Add Competitors (Batch insert to eliminate N+1 roundtrips)
         competitors = self.project_repo.get_competitors(project_id)
         for comp in competitors:
-            self.run_comp_repo.create({
-                "scrape_run_id": run.id,
-                "business_id": comp.business_id,
-                "status": "PENDING"
-            })
-
-        # Update run stats
-        self.scrape_run_repo.update(run, {"competitors_attempted": len(competitors)})
+            comp_obj = ScrapeRunCompetitor(
+                scrape_run_id=run.id,
+                business_id=comp.business_id,
+                status="PENDING"
+            )
+            self.db.add(comp_obj)
+        run.competitors_attempted = len(competitors)
+        self.db.commit()
+        self.db.refresh(run)
         return run
 
     def get_run(self, run_id: str) -> ScrapeRun | None:

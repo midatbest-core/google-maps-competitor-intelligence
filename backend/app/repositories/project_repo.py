@@ -1,4 +1,4 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import select
 from .base import BaseRepository
 from app.models.project import Project
@@ -20,5 +20,5 @@ class ProjectRepository(BaseRepository[Project]):
         return db_obj
 
     def get_competitors(self, project_id: str) -> list[ProjectCompetitor]:
-        stmt = select(ProjectCompetitor).where(ProjectCompetitor.project_id == project_id)
+        stmt = select(ProjectCompetitor).options(joinedload(ProjectCompetitor.business)).where(ProjectCompetitor.project_id == project_id)
         return list(self.session.scalars(stmt))
