@@ -16,6 +16,8 @@ class AnalysisRepository:
         ).first()
         
     def create_analysis(self, analysis: AIAnalysis) -> AIAnalysis:
+        from app.core.database import assert_ai_write_safety
+        assert_ai_write_safety(analysis.provider, self.db)
         self.db.add(analysis)
         self.db.commit()
         return analysis

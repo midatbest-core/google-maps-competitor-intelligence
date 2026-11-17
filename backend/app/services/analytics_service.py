@@ -10,6 +10,17 @@ from app.models.scrape import ScrapeObservation
 
 from app.models.auth import Workspace
 
+SYNTHETIC_EXCLUDED_KEYWORDS = {
+    "fake", "test", "testing", "dummy", "placeholder", "mock", "sample",
+    "none", "n/a", "null", "undefined", "unknown", "na"
+}
+
+def is_synthetic_keyword(kw: str) -> bool:
+    if not kw:
+        return True
+    cleaned = str(kw).strip().casefold()
+    return cleaned in SYNTHETIC_EXCLUDED_KEYWORDS or len(cleaned) <= 1
+
 class AnalyticsService:
     def __init__(self, db: Session, workspace: Workspace = None):
         self.db = db
@@ -99,7 +110,8 @@ class AnalyticsService:
         for (kw_list,) in analyses:
             if isinstance(kw_list, list):
                 for kw in kw_list:
-                    counts[kw] = counts.get(kw, 0) + 1
+                    if not is_synthetic_keyword(kw):
+                        counts[kw] = counts.get(kw, 0) + 1
                     
         sorted_counts = sorted(counts.items(), key=lambda x: x[1], reverse=True)
         return [{"keyword": k, "count": c} for k, c in sorted_counts[:50]]
@@ -153,13 +165,15 @@ class AnalyticsService:
         for (kw_list,) in self.db.query(AIAnalysis.keywords).join(Post).filter(
             Post.business_id == own_b_id, AIAnalysis.keywords.isnot(None)
         ).all():
-            if isinstance(kw_list, list): own_kws.update(kw_list)
+            if isinstance(kw_list, list):
+                own_kws.update(k for k in kw_list if not is_synthetic_keyword(k))
             
         comp_kws = set()
         for (kw_list,) in self.db.query(AIAnalysis.keywords).join(Post).filter(
             Post.business_id.in_(c_ids), AIAnalysis.keywords.isnot(None)
         ).all():
-            if isinstance(kw_list, list): comp_kws.update(kw_list)
+            if isinstance(kw_list, list):
+                comp_kws.update(k for k in kw_list if not is_synthetic_keyword(k))
             
         gap_kws = comp_kws - own_kws
         
@@ -244,13 +258,15 @@ class AnalyticsService:
             for (kw_list,) in self.db.query(AIAnalysis.keywords).join(Post).filter(Post.business_id == own_b_id, AIAnalysis.keywords.isnot(None)).all():
                 if isinstance(kw_list, list):
                     for kw in kw_list:
-                        own_kws[kw] = own_kws.get(kw, 0) + 1
+                        if not is_synthetic_keyword(kw):
+                            own_kws[kw] = own_kws.get(kw, 0) + 1
                     
         comp_kws = {}
         for (kw_list,) in self.db.query(AIAnalysis.keywords).join(Post).filter(Post.business_id.in_(c_ids), AIAnalysis.keywords.isnot(None)).all():
             if isinstance(kw_list, list):
                 for kw in kw_list:
-                    comp_kws[kw] = comp_kws.get(kw, 0) + 1
+                    if not is_synthetic_keyword(kw):
+                        comp_kws[kw] = comp_kws.get(kw, 0) + 1
 
         gaps = []
         for kw, c_count in comp_kws.items():

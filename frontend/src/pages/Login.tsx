@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import api from '../api';
+import api, { getDemoStatus, demoLogin } from '../api';
 import './Login.css';
 
 const Login = () => {
@@ -9,7 +9,35 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
+  const [demoEnabled, setDemoEnabled] = useState(false);
+  const [demoSubmitting, setDemoSubmitting] = useState(false);
   const { login } = useAuth();
+
+  useEffect(() => {
+    getDemoStatus()
+      .then((res) => {
+        if (res.data?.enabled) {
+          setDemoEnabled(true);
+        }
+      })
+      .catch(() => {
+        setDemoEnabled(false);
+      });
+  }, []);
+
+  const handleDemoLogin = async () => {
+    try {
+      setDemoSubmitting(true);
+      setError('');
+      const response = await demoLogin();
+      login(response.data.access_token);
+      window.location.href = '/dashboard';
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'Demo login failed');
+    } finally {
+      setDemoSubmitting(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,6 +107,26 @@ const Login = () => {
             {isLogin ? 'Sign In' : 'Register'}
           </button>
         </form>
+
+        {demoEnabled && (
+          <div className="demo-login-section">
+            <div className="demo-divider">
+              <span>Live Demonstration</span>
+            </div>
+            <button
+              type="button"
+              className="demo-login-btn"
+              onClick={handleDemoLogin}
+              disabled={demoSubmitting}
+            >
+              <span className="demo-icon">⚡</span>
+              <span>{demoSubmitting ? 'Accessing Demo...' : 'Admin Quick Login'}</span>
+            </button>
+            <p className="demo-disclaimer">
+              Demo Access • Pre-configured Workspace
+            </p>
+          </div>
+        )}
         
         <p className="toggle-text">
           {isLogin ? "Don't have an account? " : "Already have an account? "}

@@ -39,10 +39,18 @@ class Settings(BaseSettings):
     SCRAPER_DELAY_MIN: int = 2
     SCRAPER_DELAY_MAX: int = 5
     SCRAPER_TIMEOUT: int = 30
+    SCRAPER_PER_BUSINESS_TIMEOUT: float = 120.0
+    SCRAPER_JOB_TIMEOUT: int = 7200
     SCRAPER_MAX_CONCURRENT: int = 1
     SCRAPER_COOLDOWN: int = 60
     SCRAPER_HEADLESS: bool = True
     SCRAPER_PROFILE_DIR: str = "./.scraper_profiles"
+
+    # Demo Authentication
+    ENABLE_DEMO_LOGIN: bool = False
+    DEMO_ADMIN_EMAIL: str = "demo.admin@mapsintel.demo"
+    DEMO_ADMIN_PASSWORD: str | None = None
+    DEMO_ADMIN_NAME: str = "Demo Admin"
 
     # AI Config
     AI_PROVIDER: str = "fake"
@@ -66,6 +74,25 @@ class Settings(BaseSettings):
     GENERATION_QUEUED_MAX_WAIT_SECONDS: int = 5400  # 90 minutes default for dispatched queued jobs
     GENERATION_UNDISPATCHED_TIMEOUT_SECONDS: int = 300  # 5 minutes for undispatched jobs
     GENERATION_RUNNING_TIMEOUT_SECONDS: int = 300  # 5 minutes for running jobs
+
+    @model_validator(mode="after")
+    def validate_demo_configuration(self):
+        if self.ENABLE_DEMO_LOGIN:
+            pw = self.DEMO_ADMIN_PASSWORD
+            if not pw or not pw.strip():
+                raise ValueError(
+                    "DEMO_ADMIN_PASSWORD must be provided via environment variable when ENABLE_DEMO_LOGIN is True"
+                )
+            if (
+                len(pw) < 12
+                or not any(c.isupper() for c in pw)
+                or not any(c.islower() for c in pw)
+                or not any(c.isdigit() or not c.isalnum() for c in pw)
+            ):
+                raise ValueError(
+                    "DEMO_ADMIN_PASSWORD must be at least 12 characters and contain uppercase, lowercase, and a digit or special character"
+                )
+        return self
 
     @model_validator(mode="after")
     def validate_production_configuration(self):

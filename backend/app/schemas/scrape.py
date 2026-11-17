@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from typing import Optional, List
 from datetime import datetime
 
@@ -31,6 +31,34 @@ class ScrapeRunResponse(BaseModel):
     competitors_succeeded: int
     competitors_failed: int
     competitor_runs: Optional[List[ScrapeRunCompetitorResponse]] = None
+    total_competitors: Optional[int] = None
+    competitors_completed: Optional[int] = None
+    competitors_remaining: Optional[int] = None
+    currently_processing_index: Optional[int] = None
+    currently_processing_name: Optional[str] = None
+    estimated_remaining_seconds: Optional[int] = None
+    estimated_remaining_formatted: Optional[str] = None
+
+    @field_validator("currently_processing_name", "estimated_remaining_formatted", mode="before")
+    @classmethod
+    def validate_optional_str(cls, v):
+        if not isinstance(v, str):
+            return None
+        return v
+
+    @field_validator(
+        "total_competitors",
+        "competitors_completed",
+        "competitors_remaining",
+        "currently_processing_index",
+        "estimated_remaining_seconds",
+        mode="before"
+    )
+    @classmethod
+    def validate_optional_int(cls, v):
+        if not isinstance(v, int):
+            return None
+        return v
 
     model_config = ConfigDict(from_attributes=True)
 

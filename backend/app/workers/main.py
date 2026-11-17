@@ -13,7 +13,7 @@ from app.core.storage import LocalStorageProvider
 
 logger = logging.getLogger(__name__)
 
-PER_BUSINESS_TIMEOUT: float = 60.0  # Sensible timeout per business
+PER_BUSINESS_TIMEOUT: float = getattr(settings, "SCRAPER_PER_BUSINESS_TIMEOUT", 120.0)  # Sensible timeout per business
 MAX_RETRIES_PER_BUSINESS: int = 1   # Controlled retries for transient failures
 
 async def startup(ctx):
@@ -107,7 +107,9 @@ async def _execute_scrape_job(ctx, run_id: str):
             logger.error(f"Run {run_id} not found")
             return
 
-        competitor_runs = db.query(ScrapeRunCompetitor).filter(ScrapeRunCompetitor.scrape_run_id == run_id).all()
+        competitor_runs = db.query(ScrapeRunCompetitor).filter(
+            ScrapeRunCompetitor.scrape_run_id == run_id
+        ).order_by(ScrapeRunCompetitor.created_at.asc(), ScrapeRunCompetitor.id.asc()).all()
         has_incomplete = any(c.status not in ("SUCCESS", "NO_DATA") for c in competitor_runs)
 
         # GUARD: Completed runs must never be restarted by duplicate or expired ARQ jobs
@@ -125,10 +127,13 @@ async def _execute_scrape_job(ctx, run_id: str):
         heartbeat_stop = asyncio.Event()
         heartbeat_task = asyncio.create_task(_heartbeat_worker(run_id, heartbeat_stop, interval_seconds=15))
 
-        for c in competitor_runs:
+        total_competitors = len(competitor_runs)
+        for idx, c in enumerate(competitor_runs, 1):
             if c.status in ("SUCCESS", "NO_DATA"):
+                logger.info(f"Skipping already completed competitor {idx}/{total_competitors}: {c.business.business_name if c.business else c.business_id}")
                 continue
 
+            logger.info(f"Processing competitor {idx} of {total_competitors}: {c.business.business_name if c.business else c.business_id}")
             c.status = "RUNNING"
             run.heartbeat_at = datetime.now(timezone.utc)
             db.commit()
@@ -515,5 +520,5 @@ class WorkerSettings:
     redis_settings = get_redis_settings()
     on_startup = startup
     on_shutdown = shutdown
-    job_timeout = 1200  # 20 minutes job timeout (capped by per-business 60s timeouts)
+    job_timeout = getattr(settings, "SCRAPER_JOB_TIMEOUT", 7200)  # 2 hours default job timeout (allows multi-competitor runs with 120s timeouts)
     max_jobs = 1        # Strict single-worker concurrency to prevent OOM and browser state collisions

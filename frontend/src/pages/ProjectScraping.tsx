@@ -52,6 +52,85 @@ const formatRunName = (run?: ScrapeRun | null): string => {
   return `Scrape #${run.id.slice(0, 8)}`;
 };
 
+const getRunProgress = (run: ScrapeRun | null) => {
+  if (!run) {
+    return {
+      total: 0,
+      completed: 0,
+      remaining: 0,
+      currentIndex: null as number | null,
+      currentName: null as string | null,
+      estimatedRemaining: 'N/A',
+      progressPercent: 0,
+      isActive: false,
+    };
+  }
+
+  const competitorRuns = run.competitor_runs || [];
+  const total = run.total_competitors ?? (competitorRuns.length > 0 ? competitorRuns.length : run.competitors_attempted || 0);
+
+  let completed = run.competitors_completed;
+  if (completed === undefined || completed === null) {
+    if (competitorRuns.length > 0) {
+      completed = competitorRuns.filter(c => ['SUCCESS', 'NO_DATA', 'FAILED', 'ERROR'].includes(c.status)).length;
+    } else {
+      completed = (run.competitors_succeeded || 0) + (run.competitors_failed || 0);
+    }
+  }
+
+  const remaining = run.competitors_remaining ?? Math.max(0, total - completed);
+  const progressPercent = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+  const isActive = ['QUEUED', 'RUNNING', 'RETRYING'].includes(run.status);
+
+  let currentIndex = run.currently_processing_index ?? null;
+  let currentName = run.currently_processing_name ?? null;
+
+  if (isActive && (!currentIndex || !currentName) && competitorRuns.length > 0) {
+    const runningIdx = competitorRuns.findIndex(c => c.status === 'RUNNING');
+    if (runningIdx !== -1) {
+      currentIndex = runningIdx + 1;
+      currentName = competitorRuns[runningIdx].business?.business_name || `Competitor #${currentIndex}`;
+    } else if (completed < total) {
+      currentIndex = completed + 1;
+      const nextComp = competitorRuns[completed];
+      currentName = nextComp?.business?.business_name || `Competitor #${currentIndex}`;
+    }
+  }
+
+  // Estimated Remaining Time:
+  // Formula: Remaining competitors * 1 minute
+  let estimatedRemaining = run.estimated_remaining_formatted;
+  if (!estimatedRemaining) {
+    if (run.status === 'SUCCESS') {
+      estimatedRemaining = 'Completed';
+    } else if (['FAILED', 'CANCELLED', 'PARTIAL_SUCCESS', 'PAUSED_MANUAL_INTERVENTION'].includes(run.status)) {
+      estimatedRemaining = STATUS_CONFIG[run.status]?.label || run.status;
+    } else if (remaining <= 0) {
+      estimatedRemaining = 'Completing...';
+    } else {
+      const remSeconds = remaining * 60;
+      if (remSeconds < 60) {
+        estimatedRemaining = `${remSeconds}s remaining`;
+      } else if (remSeconds === 60) {
+        estimatedRemaining = '~1 minute remaining';
+      } else {
+        estimatedRemaining = `~${remaining} minutes remaining`;
+      }
+    }
+  }
+
+  return {
+    total,
+    completed,
+    remaining,
+    currentIndex,
+    currentName,
+    estimatedRemaining,
+    progressPercent,
+    isActive,
+  };
+};
+
 const ProjectScraping: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
@@ -537,24 +616,49 @@ const ProjectScraping: React.FC = () => {
         </div>
 
         {/* Live Active Scrape Banner / Card */}
-        {activeRun && (
-          <div className="active-scrape-card animate-slide-in">
-            <div className="scrape-pulse-indicator">
-              <span className="pulse-dot running"></span>
-            </div>
-            <div className="active-scrape-info">
-              <div className="active-scrape-header">
-                <span className="status-pill status-running">
-                  <span className="pulse-dot running"></span> RUNNING NOW
-                </span>
-                <span className="active-scrape-id">{formatRunName(activeRun)}</span>
+        {activeRun && (() => {
+          const prog = getRunProgress(activeRunDetails?.id === activeRun.id ? activeRunDetails : activeRun);
+          return (
+            <div className="active-scrape-card animate-slide-in">
+              <div className="scrape-pulse-indicator">
+                <span className="pulse-dot running"></span>
               </div>
-              <p className="active-scrape-desc">
-                Extracting posts and updates for {competitors.length} competitors. Real-time updates stream below automatically.
-              </p>
+              <div className="active-scrape-info" style={{ flex: 1 }}>
+                <div className="active-scrape-header">
+                  <span className="status-pill status-running">
+                    <span className="pulse-dot running"></span> RUNNING NOW
+                  </span>
+                  <span className="active-scrape-id">{formatRunName(activeRun)}</span>
+                  <span className="active-scrape-eta">
+                    <Clock size={13} /> {prog.estimatedRemaining}
+                  </span>
+                </div>
+                <p className="active-scrape-desc">
+                  {prog.currentIndex ? (
+                    <span>
+                      Processing competitor <strong>#{prog.currentIndex}</strong> of <strong>{prog.total}</strong>
+                      {prog.currentName ? `: ${prog.currentName}` : ''}
+                    </span>
+                  ) : (
+                    <span>Extracting posts and updates for {prog.total} competitors in sequence...</span>
+                  )}
+                </p>
+                <div className="live-progress-container">
+                  <div className="live-progress-bar-bg">
+                    <div
+                      className="live-progress-bar-fill"
+                      style={{ width: `${prog.progressPercent}%` }}
+                    />
+                  </div>
+                  <div className="live-progress-stats">
+                    <span><strong>{prog.completed}</strong> of <strong>{prog.total}</strong> completed ({prog.progressPercent}%)</span>
+                    <span><strong>{prog.remaining}</strong> remaining • {prog.estimatedRemaining}</span>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Main 2-Column Content Layout */}
         <div className="scraping-layout">
@@ -630,7 +734,9 @@ const ProjectScraping: React.FC = () => {
 
           {/* Right Column: Run Details & Competitor Breakdown */}
           <div className="scraping-details-col">
-            {activeRunDetails ? (
+            {activeRunDetails ? (() => {
+              const detailsProg = getRunProgress(activeRunDetails);
+              return (
               <div className="run-details-card">
                 <div className="run-details-top">
                   <div>
@@ -663,13 +769,25 @@ const ProjectScraping: React.FC = () => {
                 {/* Metrics Stats Row */}
                 <div className="metrics-summary-grid">
                   <div className="metric-box">
-                    <span className="metric-label">Competitors Attempted</span>
-                    <span className="metric-val">{activeRunDetails.competitors_attempted}</span>
+                    <span className="metric-label">Competitors Total</span>
+                    <span className="metric-val">{detailsProg.total}</span>
                   </div>
                   <div className="metric-box">
-                    <span className="metric-label">Succeeded</span>
+                    <span className="metric-label">Completed</span>
                     <span className="metric-val text-success">
-                      {activeRunDetails.competitors_succeeded}
+                      {detailsProg.completed}
+                    </span>
+                  </div>
+                  <div className="metric-box">
+                    <span className="metric-label">Remaining</span>
+                    <span className="metric-val" style={{ color: detailsProg.remaining > 0 ? '#38bdf8' : '#94a3b8' }}>
+                      {detailsProg.remaining}
+                    </span>
+                  </div>
+                  <div className="metric-box">
+                    <span className="metric-label">Est. Time Remaining</span>
+                    <span className="metric-val small" style={{ color: '#38bdf8', fontWeight: 600 }}>
+                      {detailsProg.estimatedRemaining}
                     </span>
                   </div>
                   <div className="metric-box">
@@ -698,15 +816,6 @@ const ProjectScraping: React.FC = () => {
                       <FileText size={15} />
                       <span>View Posts</span>
                     </Link>
-                    {/* Temporarily hidden: Combined Intelligence Engine
-                    <Link
-                      to={`/projects/${projectId}/intelligence`}
-                      className="primary-btn"
-                    >
-                      <Sparkles size={15} />
-                      <span>Synthesize Combined Intel</span>
-                    </Link>
-                    */}
                   </div>
                 )}
 
@@ -726,6 +835,7 @@ const ProjectScraping: React.FC = () => {
                       <table className="modern-table">
                         <thead>
                           <tr>
+                            <th style={{ width: '48px' }}>#</th>
                             <th>Business Name</th>
                             <th>Status</th>
                             <th>New Posts</th>
@@ -734,26 +844,33 @@ const ProjectScraping: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {activeRunDetails.competitor_runs.map((cr: ScrapeRunCompetitor) => (
-                            <tr key={cr.id}>
-                              <td className="business-cell">
-                                <strong>{cr.business?.business_name || 'Unknown Business'}</strong>
-                              </td>
-                              <td>{renderStatusBadge(cr.status)}</td>
-                              <td>
-                                <span className="stat-highlight">{cr.new_posts}</span>
-                              </td>
-                              <td>{cr.posts_discovered}</td>
-                              <td className="note-cell">{cr.error_message || '—'}</td>
-                            </tr>
-                          ))}
+                          {activeRunDetails.competitor_runs.map((cr: ScrapeRunCompetitor, idx: number) => {
+                            const isRunning = cr.status === 'RUNNING';
+                            return (
+                              <tr key={cr.id} className={isRunning ? 'row-running' : ''}>
+                                <td>
+                                  <span className="comp-num-badge">#{idx + 1}</span>
+                                </td>
+                                <td className="business-cell">
+                                  <strong>{cr.business?.business_name || 'Unknown Business'}</strong>
+                                </td>
+                                <td>{renderStatusBadge(cr.status)}</td>
+                                <td>
+                                  <span className="stat-highlight">{cr.new_posts}</span>
+                                </td>
+                                <td>{cr.posts_discovered}</td>
+                                <td className="note-cell">{cr.error_message || '—'}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
                   )}
                 </div>
               </div>
-            ) : (
+              );
+            })() : (
               <div className="select-run-placeholder">
                 <Database size={36} className="text-dim" />
                 <h3>Select a Scrape Run</h3>

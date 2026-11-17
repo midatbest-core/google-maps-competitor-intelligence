@@ -37,13 +37,78 @@ class ScrapeRun(Base, TimestampMixin):
     error_logs: Mapped[list | None] = mapped_column(JSON)
 
     project = relationship("Project", back_populates="scrape_runs")
-    competitor_runs = relationship("ScrapeRunCompetitor", back_populates="scrape_run", cascade="all, delete-orphan")
+    competitor_runs = relationship(
+        "ScrapeRunCompetitor",
+        back_populates="scrape_run",
+        cascade="all, delete-orphan",
+        order_by="ScrapeRunCompetitor.created_at.asc(), ScrapeRunCompetitor.id.asc()"
+    )
 
     @property
     def display_name(self) -> str:
         if self.run_number is not None:
             return f"Scrape {self.run_number:03d}"
         return f"Scrape #{self.id[:8]}"
+
+    @property
+    def total_competitors(self) -> int:
+        if self.competitor_runs:
+            return len(self.competitor_runs)
+        return self.competitors_attempted or 0
+
+    @property
+    def competitors_completed(self) -> int:
+        if not self.competitor_runs:
+            return (self.competitors_succeeded or 0) + (self.competitors_failed or 0)
+        return sum(1 for c in self.competitor_runs if c.status in ("SUCCESS", "NO_DATA", "FAILED", "ERROR"))
+
+    @property
+    def competitors_remaining(self) -> int:
+        return max(0, self.total_competitors - self.competitors_completed)
+
+    @property
+    def currently_processing_index(self) -> int | None:
+        if not self.competitor_runs:
+            return None
+        for idx, c in enumerate(self.competitor_runs, 1):
+            if c.status == "RUNNING":
+                return idx
+        return None
+
+    @property
+    def currently_processing_name(self) -> str | None:
+        if not self.competitor_runs:
+            return None
+        for c in self.competitor_runs:
+            if c.status == "RUNNING":
+                return c.business.business_name if (c.business and c.business.business_name) else "Competitor"
+        return None
+
+    @property
+    def estimated_remaining_seconds(self) -> int | None:
+        if self.status in ("SUCCESS", "FAILED", "CANCELLED", "PARTIAL_SUCCESS", "PAUSED_MANUAL_INTERVENTION"):
+            return 0
+        rem = self.competitors_remaining
+        # Formula: Remaining competitors * 60 seconds (1 minute per competitor)
+        return rem * 60
+
+    @property
+    def estimated_remaining_formatted(self) -> str:
+        if self.status == "SUCCESS":
+            return "Completed"
+        if self.status in ("FAILED", "CANCELLED", "PARTIAL_SUCCESS", "PAUSED_MANUAL_INTERVENTION"):
+            return self.status
+        rem = self.competitors_remaining
+        if rem <= 0:
+            return "Completing..."
+        rem_seconds = rem * 60
+        if rem_seconds < 60:
+            return f"{rem_seconds}s remaining"
+        elif rem_seconds == 60:
+            return "~1 minute remaining"
+        else:
+            minutes = rem
+            return f"~{minutes} minutes remaining"
 
 
 class ScrapeRunCompetitor(Base, TimestampMixin):

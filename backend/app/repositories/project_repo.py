@@ -27,4 +27,5 @@ class ProjectRepository(BaseRepository[Project]):
         )
         if active_only:
             stmt = stmt.where(ProjectCompetitor.is_active == True)
+        stmt = stmt.order_by(ProjectCompetitor.created_at.asc(), ProjectCompetitor.id.asc())
         return list(self.session.scalars(stmt))

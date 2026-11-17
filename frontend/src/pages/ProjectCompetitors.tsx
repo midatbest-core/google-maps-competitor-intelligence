@@ -307,9 +307,10 @@ const ProjectCompetitors = () => {
           </div>
         ) : (
           <div className="roster-grid">
-            {competitors.map(c => {
+            {competitors.map((c, index) => {
               const isOwn = c.business_id === ownBusinessId;
               const name = c.business?.business_name || 'Unknown Business';
+              const rosterNumber = index + 1;
 
               return (
                 <div
@@ -317,6 +318,9 @@ const ProjectCompetitors = () => {
                   className={`roster-card ${isOwn ? 'is-own-business' : ''}`}
                 >
                   <div className="roster-card-top">
+                    <span className="roster-number-badge" title={`Competitor #${rosterNumber}`}>
+                      #{rosterNumber}
+                    </span>
                     <div className="business-avatar">
                       <Building2 size={18} />
                     </div>

@@ -145,6 +145,13 @@ export interface ScrapeRun {
   competitors_succeeded: number;
   competitors_failed: number;
   competitor_runs?: ScrapeRunCompetitor[];
+  total_competitors?: number;
+  competitors_completed?: number;
+  competitors_remaining?: number;
+  currently_processing_index?: number;
+  currently_processing_name?: string;
+  estimated_remaining_seconds?: number;
+  estimated_remaining_formatted?: string;
 }
 
 export const startScrape = (projectId: string, config?: any) => api.post<ScrapeRun>(`/projects/${projectId}/scrape`, undefined, config);
@@ -152,6 +159,9 @@ export const getScrapeRuns = (projectId: string, config?: any) => api.get<Scrape
 export const getScrapeRun = (runId: string, config?: any) => api.get<ScrapeRun>(`/scrape-runs/${runId}`, config);
 export const resumeScrapeRun = (runId: string, config?: any) => api.post<ScrapeRun>(`/scrape-runs/${runId}/resume`, undefined, config);
 export const deleteScrapeRun = (projectId: string, runId: string, config?: any) => api.delete(`/projects/${projectId}/scrape-runs/${runId}`, config);
+
+export const getDemoStatus = () => api.get<{ enabled: boolean; email?: string }>('/auth/demo-status');
+export const demoLogin = () => api.post<{ access_token: string; token_type: string }>('/auth/demo-login');
 
 
 

@@ -14,6 +14,10 @@ class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+class DemoStatusResponse(BaseModel):
+    enabled: bool
+    email: Optional[str] = None
+
 class UserResponse(BaseModel):
     id: str
     email: str

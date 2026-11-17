@@ -410,3 +410,74 @@
 .spin {
   animation: spin 1s linear infinite;
 }
+
+/* Live Progress and Numbering Enhancements */
+.active-scrape-eta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #38bdf8;
+  margin-left: auto;
+}
+
+.live-progress-container {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.live-progress-bar-bg {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.live-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8 0%, #0ea5e9 100%);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.live-progress-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.comp-num-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: monospace;
+}
+
+.modern-table tbody tr.row-running {
+  background: rgba(56, 189, 248, 0.08) !important;
+  border-left: 3px solid #38bdf8;
+}
+
+.modern-table tbody tr.row-running .comp-num-badge {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: rgba(56, 189, 248, 0.4);
+  color: #38bdf8;
+}

@@ -127,6 +127,23 @@
   margin-bottom: 12px;
 }
 
+.roster-number-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: rgba(99, 102, 241, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  color: #a5b4fc;
+  font-size: 12px;
+  font-weight: 700;
+  font-family: monospace;
+  flex-shrink: 0;
+}
+
 .business-avatar {
   width: 36px;
   height: 36px;

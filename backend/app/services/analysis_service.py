@@ -36,6 +36,9 @@ class AnalysisService:
 
     async def analyze_post(self, post_id: str) -> Optional[AIAnalysis]:
         """Analyzes a post, returning the AIAnalysis record. Idempotent."""
+        from app.core.database import assert_ai_write_safety
+        assert_ai_write_safety(self.ai, self.db)
+
         post = self.db.query(Post).filter_by(id=post_id).first()
         if not post or not post.text_content:
             return None

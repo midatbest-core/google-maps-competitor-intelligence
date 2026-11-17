@@ -85,6 +85,8 @@ def test_every_non_public_api_operation_requires_authentication():
         ("POST", "/auth/register"),
         ("POST", "/auth/login"),
         ("POST", "/auth/logout"),
+        ("GET", "/auth/demo-status"),
+        ("POST", "/auth/demo-login"),
         ("GET", "/openapi.json"),
         ("GET", "/docs"),
         ("GET", "/docs/oauth2-redirect"),
